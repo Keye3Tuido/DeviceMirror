@@ -6,11 +6,12 @@ import CoreGraphics
 func testMirrorFeatures() throws {
     let bounds = CGRect(x: 0, y: 0, width: 848, height: 648)
     let rect = MirrorGeometry.imageRect(in: bounds, size: CGSize(width: 800, height: 600))
-    precondition(rect == CGRect(x: 24, y: 24, width: 800, height: 600))
+    precondition(rect == CGRect(x: 0, y: 6, width: 848, height: 636))
     let tall = MirrorGeometry.imageRect(in: bounds, size: CGSize(width: 600, height: 800))
-    precondition(tall.minX >= 24 && tall.minY >= 24 && tall.maxX <= 824 && tall.maxY <= 624)
+    precondition(abs(tall.minX - 181) < 0.001 && tall.minY == 0
+        && abs(tall.width - 486) < 0.001 && tall.height == 648)
     let small = MirrorGeometry.imageRect(in: CGRect(x: 0, y: 0, width: 40, height: 40), size: CGSize(width: 1, height: 1))
-    precondition(small == CGRect(x: 10, y: 10, width: 20, height: 20))
+    precondition(small == CGRect(x: 0, y: 0, width: 40, height: 40))
     for (point, expected) in [
         (CGPoint(x: -10, y: -10), CGPoint(x: 0, y: 0)),
         (CGPoint(x: 900, y: 700), CGPoint(x: 1, y: 1)),
@@ -48,5 +49,5 @@ func testMirrorFeatures() throws {
     precondition(!a.process.isRunning && b.process.isRunning)
     b.stop()
     precondition(exitB.wait(timeout: .now() + 4) == .success && !b.process.isRunning)
-    print("PASS: 留白/四边坐标/旋转/独立日志进程/Unicode日志/停止隔离")
+    print("PASS: 等比贴合画面/四边坐标/旋转/独立日志进程/Unicode日志/停止隔离")
 }

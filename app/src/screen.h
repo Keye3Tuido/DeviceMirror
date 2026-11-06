@@ -1,5 +1,5 @@
 /* Device Mirror modification, Copyright 2026 Keye3Tuido:
- * per-window gesture margin state; original scrcpy licensing retained.
+ * per-window device input state; original scrcpy licensing retained.
  */
 #ifndef SC_SCREEN_H
 #define SC_SCREEN_H
@@ -95,7 +95,7 @@ struct sc_screen {
     enum sc_orientation orientation;
     // rectangle of the content (excluding black borders)
     struct SDL_FRect rect;
-    bool device_mirror_margin;
+    bool device_mirror_input;
     bool window_shown;
 
     // only accessed from the thread calling sc_frame_sink_ops functions

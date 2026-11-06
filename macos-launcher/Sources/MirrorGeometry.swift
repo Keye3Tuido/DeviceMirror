@@ -6,9 +6,7 @@ import CoreGraphics
 enum MirrorGeometry {
     static func imageRect(in bounds: CGRect, size: CGSize) -> CGRect {
         guard size.width > 0, size.height > 0 else { return .zero }
-        let margin = min(24, min(bounds.width, bounds.height) / 4)
-        let available = bounds.insetBy(dx: margin, dy: margin)
-        let scale = min(available.width / size.width, available.height / size.height)
+        let scale = min(bounds.width / size.width, bounds.height / size.height)
         let width = size.width * scale, height = size.height * scale
         return CGRect(x: bounds.midX - width / 2, y: bounds.midY - height / 2, width: width, height: height)
     }

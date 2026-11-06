@@ -34,7 +34,7 @@ class IOSCanvasView: NSView {
     }
     deinit { if let focusObserver { NotificationCenter.default.removeObserver(focusObserver) } }
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.white.setFill(); bounds.fill()
+        NSColor.black.setFill(); bounds.fill()
         image?.draw(in: imageRect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
     }
     override func mouseDown(with event: NSEvent) {

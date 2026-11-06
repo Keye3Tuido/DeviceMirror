@@ -53,7 +53,7 @@ struct CanvasTests {
         canvas.mouseDown(with: event(.leftMouseDown, center))
         canvas.displayedSize = CGSize(width: 1180, height: 820)
         canvas.mouseUp(with: event(.leftMouseUp, end, 10.5))
-        precondition(gestures.count == 3 && taps == [center], "Margin input, cancellation and rotation must not submit touches")
+        precondition(gestures.count == 3 && taps == [center], "Input outside the image, cancellation and rotation must not submit touches")
         canvas.displayedSize = CGSize(width: 820, height: 1180)
         canvas.mouseDown(with: event(.leftMouseDown, center))
         for index in 1...1200 {
@@ -68,6 +68,6 @@ struct CanvasTests {
             timestamp: 10, windowNumber: 0, context: nil, characters: "中文", charactersIgnoringModifiers: "中文", isARepeat: false, keyCode: 0)!)
         precondition(text == ["中文"])
         precondition(app.activationPolicy() == .prohibited && app.windows.isEmpty)
-        print("PASS: iOS 点击/滑动轨迹与停顿/长按/取消与旋转/留白隔离/键盘文字/无前台窗口")
+        print("PASS: iOS 点击/滑动轨迹与停顿/长按/取消与旋转/画面外输入隔离/键盘文字/无前台窗口")
     }
 }

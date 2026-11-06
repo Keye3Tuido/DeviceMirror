@@ -1,5 +1,5 @@
 /* Device Mirror modification, Copyright 2026 Keye3Tuido:
- * white gesture margins and device-edge coordinate clamping.
+ * device-edge coordinate clamping for native input.
  * Original scrcpy licensing and authorship are retained.
  */
 #include "screen.h"
@@ -257,15 +257,9 @@ compute_content_rect(struct sc_size window_size, struct sc_size content_size,
 static void
 sc_screen_update_content_rect(struct sc_screen *screen) {
     struct sc_size window_size = sc_sdl_get_window_size(screen->window);
-    unsigned margin = screen->device_mirror_margin
-                    ? sc_device_mirror_margin(window_size.width, window_size.height) : 0;
-    window_size.width -= 2 * margin;
-    window_size.height -= 2 * margin;
     compute_content_rect(window_size, screen->content_size,
                          screen->is_icon_active, screen->render_fit,
                          &screen->rect);
-    screen->rect.x += margin;
-    screen->rect.y += margin;
 }
 
 // render the texture to the renderer
@@ -534,7 +528,7 @@ bool
 sc_screen_init(struct sc_screen *screen,
                const struct sc_screen_params *params) {
     screen->controller = params->controller;
-    screen->device_mirror_margin = getenv("DEVICE_MIRROR_TOOLBAR") != NULL;
+    screen->device_mirror_input = getenv("DEVICE_MIRROR_TOOLBAR") != NULL;
 
     screen->resize_pending = false;
     screen->window_shown = false;
@@ -553,9 +547,6 @@ sc_screen_init(struct sc_screen *screen,
     screen->bg.r = (params->background_color >> 16) & 0xFF;
     screen->bg.g = (params->background_color >> 8) & 0xFF;
     screen->bg.b = params->background_color & 0xFF;
-    if (screen->device_mirror_margin) {
-        screen->bg.r = screen->bg.g = screen->bg.b = 255;
-    }
 
     screen->req.x = params->window_x;
     screen->req.y = params->window_y;
@@ -1400,6 +1391,6 @@ sc_screen_convert_window_to_frame_coords(struct sc_screen *screen,
             break;
     }
 
-    return screen->device_mirror_margin
+    return screen->device_mirror_input
          ? sc_device_mirror_clamp(result, screen->frame_size) : result;
 }

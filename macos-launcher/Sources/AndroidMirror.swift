@@ -367,7 +367,7 @@ struct HelpView: View {
                 .font(.callout).foregroundStyle(.secondary)
             Text("先点击设备输入框，再点投屏窗口顶部“发送文本”，输入内容后发送；也可使用文字栏，支持中文。直接提交到输入框并保留设备剪贴板；首次发送需允许 USB 安装文本输入组件；用“按键”菜单发送回车、退格、Tab 和方向键。")
                 .font(.callout).foregroundStyle(.secondary)
-            Text("从画面四周的白色留白按住鼠标拖入，可模拟屏幕边缘手势。设备列表中的“记录系统日志”按设备启停录制，窗口“日志”打开运行日志。")
+            Text("在画面内按住鼠标拖动可模拟滑动。设备列表中的“记录系统日志”按设备启停录制，窗口“日志”打开运行日志。")
                 .font(.callout).foregroundStyle(.secondary)
             Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 11) {
                 ForEach(shortcuts, id: \.0) { key, description in

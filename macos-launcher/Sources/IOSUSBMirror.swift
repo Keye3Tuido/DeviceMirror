@@ -232,7 +232,7 @@ private final class USBMirrorInputView: IOSCanvasView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.white.cgColor
+        layer?.backgroundColor = NSColor.black.cgColor
         preview.videoGravity = .resizeAspect
         layer?.addSublayer(preview)
     }

@@ -6,12 +6,6 @@
 
 #include "coords.h"
 
-static inline unsigned
-sc_device_mirror_margin(unsigned width, unsigned height) {
-    unsigned margin = width < height ? width / 4 : height / 4;
-    return margin < 24 ? margin : 24;
-}
-
 static inline struct sc_point
 sc_device_mirror_clamp(struct sc_point point, struct sc_size size) {
     if (point.x < 0) { point.x = 0; }

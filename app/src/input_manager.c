@@ -1,5 +1,5 @@
 /* Device Mirror modification, Copyright 2026 Keye3Tuido:
- * defer margin presses until the drag enters the device image.
+ * defer presses outside the image until a drag enters it.
  * Original scrcpy licensing and authorship are retained.
  */
 #include "input_manager.h"
@@ -940,7 +940,7 @@ sc_input_manager_process_mouse_button(struct sc_input_manager *im,
     // double-click on black borders resizes to fit the device screen
     bool video = im->screen->video;
     bool mouse_relative_mode = im->mp && im->mp->relative_mode;
-    if (video && !im->screen->device_mirror_margin && !mouse_relative_mode
+    if (video && !im->screen->device_mirror_input && !mouse_relative_mode
             && event->button == SDL_BUTTON_LEFT
             && event->clicks == 2) {
         int32_t x = event->x;
@@ -985,12 +985,12 @@ sc_input_manager_process_mouse_button(struct sc_input_manager *im,
     };
 
     if (down && event->button == SDL_BUTTON_LEFT
-            && im->screen->device_mirror_margin && !mouse_relative_mode
+            && im->screen->device_mirror_input && !mouse_relative_mode
             && !ctrl_pressed && !shift_pressed) {
         SDL_FRect *r = &im->screen->rect;
         if (event->x < r->x || event->x >= r->x + r->w
                 || event->y < r->y || event->y >= r->y + r->h) {
-            // A click confined to the margin must not tap the device edge.
+            // A click outside the image must not tap the device edge.
             im->edge_pending_event = evt;
             im->edge_pending = true;
             return;
