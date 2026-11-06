@@ -459,17 +459,42 @@ final class IOSSession: NSObject, ObservableObject, NSWindowDelegate {
         }
     }
 
-    func navigation(_ action: String) {
+    func navigation(_ action: String, duration: TimeInterval = 0) {
         let label = ["back": "返回", "home": "主页", "appSwitcher": "多任务"][action] ?? action
         perform(success: "\(label)操作已发送") { id in
-            let reply = try await self.request("session/\(id)/wda/devicemirror/navigation", body: ["action": action])
+            let reply = try await self.request("session/\(id)/wda/devicemirror/navigation",
+                body: ["action": action, "duration": duration], timeout: max(12, duration + 12))
             if let method = (reply["value"] as? [String: Any])?["method"] as? String {
                 try? self.log?.write(contentsOf: Data("CONTROL RESULT action=\(action) method=\(method)\n".utf8))
             }
         }
     }
-    func button(_ name: String) {
-        perform { id in _ = try await self.request("session/\(id)/wda/pressButton", body: ["name": name]) }
+    func button(_ name: String, duration: TimeInterval = 0) {
+        if duration >= 0.5 {
+            guard let usage = ["volumedown": 0xEA, "volumeup": 0xE9, "power": 0x30][name] else { return }
+            perform { id in
+                _ = try await self.request("session/\(id)/wda/performIoHidEvent",
+                    body: ["page": 0x0C, "usage": usage, "duration": duration], timeout: duration + 12)
+            }
+        } else {
+            perform { id in _ = try await self.request("session/\(id)/wda/pressButton", body: ["name": name]) }
+        }
+    }
+    func rotate() {
+        perform(success: "屏幕方向已切换") { id in
+            let reply = try await self.request("session/\(id)/orientation")
+            guard let current = reply["value"] as? String, ["PORTRAIT", "LANDSCAPE"].contains(current) else {
+                throw NSError(domain: "DeviceMirror", code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "无法读取当前屏幕方向，请稍后重试。"])
+            }
+            let target = current == "PORTRAIT" ? "LANDSCAPE" : "PORTRAIT"
+            _ = try await self.request("session/\(id)/orientation", body: ["orientation": target])
+            let actual = try await self.request("session/\(id)/orientation")["value"] as? String
+            guard actual == target else {
+                throw NSError(domain: "DeviceMirror", code: 4,
+                    userInfo: [NSLocalizedDescriptionKey: "当前应用未切换方向，请检查方向锁定或应用是否支持横竖屏。"])
+            }
+        }
     }
     func lock(_ lock: Bool) {
         perform { _ in _ = try await self.request(lock ? "wda/lock" : "wda/unlock", body: [:]) }
@@ -544,16 +569,17 @@ struct IOSSessionView: View {
     @ObservedObject var session: IOSSession
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 16) {
-                key("返回", "chevron.left") { session.navigation("back") }
-                key("主页", "house") { session.navigation("home") }
+            HStack(spacing: 8) {
+                heldKey("返回", "chevron.left") { session.navigation("back", duration: $0) }
+                heldKey("主页", "house") { session.navigation("home", duration: $0) }
                     .help("从屏幕底边向上快速滑动并松开，返回主屏幕")
-                key("多任务", "square.on.square") { session.navigation("appSwitcher") }
-                key("锁屏", "lock") { session.lock(true) }
-                key("唤醒", "lock.open") { session.lock(false) }
+                heldKey("多任务", "square.on.square") { session.navigation("appSwitcher", duration: $0) }
+                key("旋转", "rotate.right") { session.rotate() }.help("切换此设备的横屏与竖屏")
+                heldKey("锁屏", "lock") { if $0 == 0 { session.lock(true) } else { session.button("power", duration: $0) } }
+                heldKey("唤醒", "lock.open") { if $0 == 0 { session.lock(false) } else { session.button("power", duration: $0) } }
                 if !session.device.isSimulator {
-                    key("音量减", "speaker.minus") { session.button("volumedown") }
-                    key("音量加", "speaker.plus") { session.button("volumeup") }
+                    heldKey("音量减", "speaker.minus") { session.button("volumedown", duration: $0) }
+                    heldKey("音量加", "speaker.plus") { session.button("volumeup", duration: $0) }
                 }
                 Spacer(minLength: 0)
             }.padding(12).disabled(!session.ready || session.commandBusy)
@@ -593,6 +619,10 @@ struct IOSSessionView: View {
     private func key(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { VStack(spacing: 4) { Image(systemName: symbol); Text(title).font(.caption2) } }
             .buttonStyle(.plain).help(title)
+    }
+    private func heldKey(_ title: String, _ symbol: String, action: @escaping (TimeInterval) -> Void) -> some View {
+        DeviceKeyButton(title: title, symbol: symbol, enabled: session.ready && !session.commandBusy, action: action)
+            .frame(width: 35, height: 38)
     }
 }
 

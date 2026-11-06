@@ -59,7 +59,8 @@ def main():
 
     session = request('/session', {'capabilities': {'alwaysMatch': {'shouldWaitForQuiescence': False}}})
     prefix = '/session/' + session['sessionId']
-    request(prefix + '/appium/settings', {'settings': {'waitForIdleTimeout': 0, 'animationCoolOffTimeout': 0}})
+    request(prefix + '/appium/settings', {'settings': {'waitForIdleTimeout': 0, 'animationCoolOffTimeout': 0,
+                                                     'defaultActiveApplication': bundle}})
 
     def source():
         return ET.fromstring(request(prefix + '/source?format=xml')['value'])
@@ -77,9 +78,9 @@ def main():
         run('xcrun', 'simctl', 'launch', args.simulator, bundle)
         time.sleep(0.4)
 
-    def back(method=None, expected=200):
+    def back(method=None, expected=200, duration=0):
         started = time.monotonic()
-        reply = request(prefix + '/wda/devicemirror/navigation', {'action': 'back'}, expected)
+        reply = request(prefix + '/wda/devicemirror/navigation', {'action': 'back', 'duration': duration}, expected)
         if method: assert reply['value']['method'] == method, reply
         print('Back', method or 'unavailable', round((time.monotonic() - started) * 1000), 'ms', flush=True)
 
@@ -108,6 +109,11 @@ def main():
         back(expected=500)
         assert any(e.get('name') == 'Root' for e in source().iter('XCUIElementTypeNavigationBar')), 'Root Back must not trigger Compose'
         tap('custom'); back('labeledBackButton'); find('custom'); screenshot('custom-back')
+        tap('custom'); back('labeledBackButton', duration=0.8)
+        assert find('long-back-result').get('label') == 'Held Back', 'Held Back must trigger the control long-press recognizer'
+        back('labeledBackButton'); find('custom')
+        back(expected=500, duration=-1)
+        back(expected=500, duration=31)
         tap('web'); time.sleep(3)
         (args.output / 'before-web-back.xml').write_text(ET.tostring(source(), encoding='unicode'))
         back('labeledBackButton'); find('First page'); screenshot('web-back')
@@ -127,12 +133,19 @@ def main():
         request(prefix + '/orientation', {'orientation': 'LANDSCAPE'})
         time.sleep(0.5)
         touch([(0.2, 0.3, 0), (0.8, 0.7, 0.4)])
+        for _ in range(2):
+            current = request(prefix + '/orientation')['value']
+            target = 'LANDSCAPE' if current == 'PORTRAIT' else 'PORTRAIT'
+            request(prefix + '/orientation', {'orientation': target})
+            assert request(prefix + '/orientation')['value'] == target
+            time.sleep(0.5)
+            touch([(0.5, 0.5, 0), (0.5, 0.5, 0.8)])
         screenshot('landscape-touch')
         for points in [[], [{'x': 0, 'y': 0, 'time': 0}],
                        [{'x': 0, 'y': 0, 'time': 0}, {'x': 2, 'y': 0, 'time': 1}],
                        [{'x': 0, 'y': 0, 'time': 0}, {'x': 0, 'y': 0, 'time': -1}]]:
             request(prefix + '/wda/devicemirror/gesture', {'points': points}, expected=500)
-        print('PASS: standard/custom/web Back; root safety; UIKit scrolling; curved touch path, hold, long press; landscape; invalid input.', flush=True)
+        print('PASS: standard/custom/web Back; held Back; root safety; UIKit scrolling; curved touch path, hold, long press; rotation toggle and rotated touch; invalid input.', flush=True)
     finally:
         try:
             request(prefix + '/orientation', {'orientation': 'PORTRAIT'})

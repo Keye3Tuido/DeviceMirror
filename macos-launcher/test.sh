@@ -8,6 +8,8 @@ xcrun swiftc -swift-version 5 Sources/AndroidCore.swift Sources/AndroidLog.swift
 .build/core-tests
 xcrun swiftc -swift-version 5 Sources/MirrorGeometry.swift Sources/IOSCanvasView.swift tests/CanvasTests.swift -o .build/canvas-tests
 .build/canvas-tests
+xcrun swiftc -swift-version 5 Sources/DeviceKeyButton.swift tests/KeyButtonTests.swift -o .build/key-button-tests
+.build/key-button-tests
 xcrun swiftc -swift-version 5 Sources/AndroidCore.swift Sources/USBMux.swift DeviceService/ServiceSupport.swift DeviceService/USBForwarder.swift tests/ServiceTests.swift -o .build/service-tests
 .build/service-tests
 xcrun cc -std=c11 -Wall -Wextra tests/EdgeGeometryTests.c -o .build/edge-tests

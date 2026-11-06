@@ -363,11 +363,11 @@ struct HelpView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Android 操作说明").font(.title2.bold())
-            Text("投屏窗口顶部提供返回、主页、最近任务、音量、电源和通知按键。先在设备列表选中设备，再设置画质与帧率并开始投屏。")
+            Text("投屏窗口顶部提供返回、主页、最近任务、旋转、音量、电源和通知按键。先在设备列表选中设备，再设置画质与帧率并开始投屏。")
                 .font(.callout).foregroundStyle(.secondary)
             Text("先点击设备输入框，再点投屏窗口顶部“发送文本”，输入内容后发送；也可使用文字栏，支持中文。直接提交到输入框并保留设备剪贴板；首次发送需允许 USB 安装文本输入组件；用“按键”菜单发送回车、退格、Tab 和方向键。")
                 .font(.callout).foregroundStyle(.secondary)
-            Text("在画面内按住鼠标拖动可模拟滑动。设备列表中的“记录系统日志”按设备启停录制，窗口“日志”打开运行日志。")
+            Text("画面内按住鼠标可长按控件，拖动可模拟滑动。顶部设备按键支持按住；“旋转”切换并锁定横竖屏，可在设备端恢复自动旋转。设备列表中的“记录系统日志”按设备启停录制，窗口“日志”打开运行日志。")
                 .font(.callout).foregroundStyle(.secondary)
             Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 11) {
                 ForEach(shortcuts, id: \.0) { key, description in

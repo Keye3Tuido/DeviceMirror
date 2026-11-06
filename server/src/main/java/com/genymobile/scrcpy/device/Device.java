@@ -22,6 +22,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.SystemClock;
+import android.util.LongSparseArray;
 import android.view.InputDevice;
 import android.view.InputEvent;
 import android.view.KeyCharacterMap;
@@ -32,6 +33,9 @@ import java.util.List;
 import java.util.Locale;
 
 public final class Device {
+
+    // Device Mirror: a held key keeps its original down time across repeats and release.
+    private static final LongSparseArray<Long> KEY_DOWN_TIMES = new LongSparseArray<>();
 
     public static final int DISPLAY_ID_NONE = -1;
 
@@ -71,10 +75,20 @@ public final class Device {
         return ServiceManager.getInputManager().injectInputEvent(inputEvent, injectMode);
     }
 
-    public static boolean injectKeyEvent(int action, int keyCode, int repeat, int metaState, int displayId, int injectMode) {
+    public static synchronized boolean injectKeyEvent(int action, int keyCode, int repeat, int metaState, int displayId, int injectMode) {
         long now = SystemClock.uptimeMillis();
-        KeyEvent event = new KeyEvent(now, now, action, keyCode, repeat, metaState, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0,
+        long identity = ((long) displayId << 32) | (keyCode & 0xffffffffL);
+        if (action == KeyEvent.ACTION_DOWN && repeat == 0) {
+            KEY_DOWN_TIMES.put(identity, now);
+        }
+        Long started = KEY_DOWN_TIMES.get(identity);
+        long downTime = started != null ? started : now;
+        int flags = action == KeyEvent.ACTION_DOWN && repeat == 1 ? KeyEvent.FLAG_LONG_PRESS : 0;
+        KeyEvent event = new KeyEvent(downTime, now, action, keyCode, repeat, metaState, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, flags,
                 InputDevice.SOURCE_KEYBOARD);
+        if (action == KeyEvent.ACTION_UP) {
+            KEY_DOWN_TIMES.remove(identity);
+        }
         return injectEvent(event, displayId, injectMode);
     }
 
@@ -195,14 +209,13 @@ public final class Device {
     }
 
     /**
-     * Disable auto-rotation (if enabled), set the screen rotation and re-enable auto-rotation (if it was enabled).
+     * Device Mirror: select and lock the requested orientation. Thawing it immediately
+     * lets the physical orientation sensor undo the user's manual rotation.
      */
     public static void rotateDevice(int displayId) {
         assert displayId != DISPLAY_ID_NONE;
 
         WindowManager wm = ServiceManager.getWindowManager();
-
-        boolean accelerometerRotation = !wm.isRotationFrozen(displayId);
 
         int currentRotation = getCurrentRotation(displayId);
         int newRotation = (currentRotation & 1) ^ 1; // 0->1, 1->0, 2->1, 3->0
@@ -210,11 +223,6 @@ public final class Device {
 
         Ln.i("Device rotation requested: " + newRotationString);
         wm.freezeRotation(displayId, newRotation);
-
-        // restore auto-rotate if necessary
-        if (accelerometerRotation) {
-            wm.thawRotation(displayId);
-        }
     }
 
     private static int getCurrentRotation(int displayId) {

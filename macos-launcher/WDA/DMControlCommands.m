@@ -127,6 +127,12 @@
 + (id<FBResponsePayload>)navigation:(FBRouteRequest *)request
 {
   NSString *action = request.arguments[@"action"];
+  id rawDuration = request.arguments[@"duration"] ?: @0;
+  if (![rawDuration isKindOfClass:NSNumber.class] || !isfinite([rawDuration doubleValue])
+      || [rawDuration doubleValue] < 0 || [rawDuration doubleValue] > 30) {
+    return FBResponseWithUnknownErrorFormat(@"按住时长须在 0 到 30 秒之间。");
+  }
+  double duration = [rawDuration doubleValue];
   if ([action isEqual:@"back"]) {
     XCUIApplication *app = request.session.activeApplication;
     // UIKit's standard navigation Back button carries the accessibility Back
@@ -139,7 +145,8 @@
         id<FBXCElementSnapshot> snapshot = button.fb_standardSnapshot;
         if ((snapshot.traits & backTrait) == 0 && ![snapshot.identifier isEqualToString:@"BackButton"]) continue;
         if (!button.enabled || !button.hittable) continue;
-        [button tap];
+        if (duration >= 0.5) [button pressForDuration:duration];
+        else [button tap];
         return FBResponseWithObject(@{@"method": @"navigationButton"});
       }
     }
@@ -158,11 +165,15 @@
       if (button.enabled && button.hittable) [available addObject:button];
     }
     if (available.count == 1) {
-      [available.firstObject tap];
+      if (duration >= 0.5) [available.firstObject pressForDuration:duration];
+      else [available.firstObject tap];
       return FBResponseWithObject(@{@"method": @"labeledBackButton"});
     }
     if (available.count > 1) {
       return FBResponseWithUnknownErrorFormat(@"当前页面有多个返回控件，请直接点击需要的那个。");
+    }
+    if (duration >= 0.5) {
+      return FBResponseWithUnknownErrorFormat(@"当前页面未找到可长按的返回控件，请在画面中直接长按目标按钮。");
     }
     // At a navigation root, Back first dismisses a visible keyboard.
     if ([FBKeyboard waitUntilVisibleForApplication:app timeout:0 error:nil]) {
@@ -177,6 +188,13 @@
     return FBResponseWithUnknownErrorFormat(@"当前页面未找到可用的返回控件或键盘（%@）。iOS 没有全局返回键；未标注的自定义返回控件请直接点击。", app.bundleID);
   }
   if ([action isEqual:@"home"]) {
+    if (duration >= 0.5) {
+      NSError *error = nil;
+      if (![XCUIDevice.sharedDevice fb_performIOHIDEventWithPage:0x0C usage:0x40 duration:duration error:&error]) {
+        return FBResponseWithUnknownError(error);
+      }
+      return FBResponseWithObject(@{@"method": @"heldHomeKey"});
+    }
     // Start at the bottom edge and release while moving upward. A pause at
     // the end would turn the system's Home gesture into the App Switcher.
     NSArray *points = @[
@@ -195,7 +213,7 @@
   // Apple vendor keyboard usage for the system App Switcher. A single device
   // event works independently of screen orientation, app geometry and Dock.
   // This explicit navigation command is independent of recorded mouse drags.
-  if (![XCUIDevice.sharedDevice fb_performIOHIDEventWithPage:0xFF01 usage:0x10 duration:0.08 error:&error]) {
+  if (![XCUIDevice.sharedDevice fb_performIOHIDEventWithPage:0xFF01 usage:0x10 duration:MAX(0.08, duration) error:&error]) {
     return FBResponseWithUnknownError(error);
   }
   return FBResponseWithOK();

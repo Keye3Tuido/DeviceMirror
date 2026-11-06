@@ -58,6 +58,14 @@ class Probe: UIViewController {
         let page = page(); let button = UIButton(type: .system); button.setTitle("返回", for: .normal)
         button.accessibilityIdentifier = "custom-back"; button.frame = CGRect(x: 40, y: 140, width: 240, height: 80)
         button.addTarget(self, action: #selector(dismissPage), for: .touchUpInside); page.view.addSubview(button)
+        let result = UILabel(frame: CGRect(x: 40, y: 240, width: 260, height: 50))
+        result.text = "Waiting"; result.accessibilityIdentifier = "long-back-result"; page.view.addSubview(result)
+        button.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(heldBack)))
+    }
+    @objc func heldBack(_ recognizer: UILongPressGestureRecognizer) {
+        if recognizer.state == .began {
+            (presentedViewController?.view.subviews.first { $0.accessibilityIdentifier == "long-back-result" } as? UILabel)?.text = "Held Back"
+        }
     }
     @objc func web() {
         let page = page(); let web = WKWebView(frame: page.view.bounds); web.autoresizingMask = [.flexibleWidth, .flexibleHeight]

@@ -10,6 +10,29 @@
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
 
+@interface DMHeldKeyButton : NSButton
+@property(nonatomic, copy) void (^press)(void);
+@property(nonatomic, copy) void (^repeatPress)(void);
+@property(nonatomic, copy) void (^releasePress)(void);
+@property(nonatomic, assign) BOOL trackingKey;
+@end
+
+@implementation DMHeldKeyButton
+- (void)mouseDown:(NSEvent *)event {
+    if (!self.enabled) { return; }
+    self.trackingKey = YES;
+    self.press();
+    NSTimer *repeat = [NSTimer timerWithTimeInterval:0.08 repeats:YES block:^(NSTimer *timer) {
+        (void)timer;
+        self.repeatPress();
+    }];
+    repeat.fireDate = [NSDate dateWithTimeIntervalSinceNow:0.5];
+    [NSRunLoop.mainRunLoop addTimer:repeat forMode:NSRunLoopCommonModes];
+    @try { [super mouseDown:event]; }
+    @finally { [repeat invalidate]; self.releasePress(); self.trackingKey = NO; }
+}
+@end
+
 @interface DMDeviceToolbar : NSObject <NSToolbarDelegate>
 @property(nonatomic, assign) struct sc_controller *controller;
 @property(nonatomic, assign) SDL_Window *sdlWindow;
@@ -19,6 +42,12 @@
 @property(nonatomic, strong) NSTextField *input;
 @property(nonatomic, strong) NSMenuItem *editMenu;
 @property(nonatomic, assign) unsigned pendingTexts;
+@property(nonatomic, strong) NSNumber *heldKey;
+@property(nonatomic, assign) unsigned keyRepeat;
+@property(nonatomic, strong) id resignObserver;
+- (void)releaseKey;
+- (void)beginKey:(enum android_keycode)keycode;
+- (void)repeatKey;
 @end
 
 // SDL's application hook runs before AppKit dispatches to native controls.
@@ -134,7 +163,7 @@ static void DMInstallEventRouting(DMDeviceToolbar *owner) {
 
 - (NSArray<NSToolbarItemIdentifier> *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar {
     (void) toolbar;
-    return @[@"back", @"home", @"recents", @"send-text", NSToolbarFlexibleSpaceItemIdentifier,
+    return @[@"back", @"home", @"recents", @"rotate", @"send-text", NSToolbarFlexibleSpaceItemIdentifier,
              @"volume-down", @"volume-up", @"power", @"notifications"];
 }
 
@@ -150,6 +179,7 @@ static void DMInstallEventRouting(DMDeviceToolbar *owner) {
         @"back": @[@"返回", @"chevron.backward", @(AKEYCODE_BACK)],
         @"home": @[@"主页", @"house", @(AKEYCODE_HOME)],
         @"recents": @[@"最近任务", @"square.on.square", @(AKEYCODE_APP_SWITCH)],
+        @"rotate": @[@"旋转", @"rotate.right", @(-2)],
         @"send-text": @[@"发送文本", @"text.bubble", @(0)],
         @"volume-down": @[@"音量减", @"speaker.minus", @(AKEYCODE_VOLUME_DOWN)],
         @"volume-up": @[@"音量加", @"speaker.plus", @(AKEYCODE_VOLUME_UP)],
@@ -166,6 +196,22 @@ static void DMInstallEventRouting(DMDeviceToolbar *owner) {
     item.tag = [spec[2] integerValue];
     item.target = self;
     item.action = @selector(press:);
+    if (item.tag > 0) {
+        DMHeldKeyButton *button = [[DMHeldKeyButton alloc] initWithFrame:NSMakeRect(0, 0, 32, 28)];
+        button.image = item.image;
+        button.bordered = NO;
+        button.toolTip = [item.toolTip stringByAppendingString:@"；按住可长按"];
+        button.accessibilityLabel = spec[0];
+        button.tag = item.tag;
+        button.target = self;
+        button.action = @selector(keyClicked:);
+        __weak DMDeviceToolbar *owner = self;
+        NSInteger code = item.tag;
+        button.press = ^{ [owner beginKey:(enum android_keycode)code]; };
+        button.repeatPress = ^{ [owner repeatKey]; };
+        button.releasePress = ^{ [owner releaseKey]; };
+        item.view = button;
+    }
     if ([identifier isEqualToString:@"send-text"]) {
         item.action = @selector(showTextInput:);
         item.visibilityPriority = NSToolbarItemVisibilityPriorityHigh;
@@ -189,12 +235,51 @@ static void DMInstallEventRouting(DMDeviceToolbar *owner) {
     }
 }
 
+- (void)beginKey:(enum android_keycode)keycode {
+    [self releaseKey];
+    struct sc_control_msg msg = {0};
+    msg.type = SC_CONTROL_MSG_TYPE_INJECT_KEYCODE;
+    msg.inject_keycode.keycode = keycode;
+    msg.inject_keycode.action = AKEY_EVENT_ACTION_DOWN;
+    if (self.controller && sc_controller_push_msg(self.controller, &msg)) {
+        self.heldKey = @(keycode);
+        self.keyRepeat = 0;
+    }
+}
+
+- (void)keyClicked:(DMHeldKeyButton *)button {
+    if (!button.trackingKey) { [self sendKey:(enum android_keycode)button.tag]; }
+}
+
+- (void)repeatKey {
+    if (!self.heldKey || !self.controller) { return; }
+    struct sc_control_msg msg = {0};
+    msg.type = SC_CONTROL_MSG_TYPE_INJECT_KEYCODE;
+    msg.inject_keycode.keycode = self.heldKey.intValue;
+    msg.inject_keycode.action = AKEY_EVENT_ACTION_DOWN;
+    msg.inject_keycode.repeat = ++self.keyRepeat;
+    if (!sc_controller_push_msg(self.controller, &msg)) { [self releaseKey]; }
+}
+
+- (void)releaseKey {
+    if (!self.heldKey) { return; }
+    struct sc_control_msg msg = {0};
+    msg.type = SC_CONTROL_MSG_TYPE_INJECT_KEYCODE;
+    msg.inject_keycode.keycode = self.heldKey.intValue;
+    msg.inject_keycode.action = AKEY_EVENT_ACTION_UP;
+    self.heldKey = nil;
+    if (self.controller && !sc_controller_push_msg(self.controller, &msg)) {
+        LOGW("Device Mirror: held key UP rejected");
+    }
+}
+
 - (void)press:(NSToolbarItem *)sender {
     if (sender.tag < 0) {
         struct sc_control_msg msg = {0};
-        msg.type = SC_CONTROL_MSG_TYPE_EXPAND_NOTIFICATION_PANEL;
+        msg.type = sender.tag == -2 ? SC_CONTROL_MSG_TYPE_ROTATE_DEVICE
+                                  : SC_CONTROL_MSG_TYPE_EXPAND_NOTIFICATION_PANEL;
         if (!sc_controller_push_msg(self.controller, &msg)) {
-            LOGW("Device Mirror: notification command rejected");
+            LOGW("Device Mirror: toolbar command rejected");
         }
         return;
     }
@@ -324,6 +409,9 @@ sc_device_toolbar_create(SDL_Window *window, struct sc_controller *controller) {
     if (@available(macOS 11.0, *)) { native.toolbarStyle = NSWindowToolbarStyleExpanded; }
     [owner installInput];
     DMInstallEventRouting(owner);
+    __weak DMDeviceToolbar *weakOwner = owner;
+    owner.resignObserver = [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidResignKeyNotification
+        object:native queue:nil usingBlock:^(NSNotification *note) { (void)note; [weakOwner releaseKey]; }];
     return (__bridge_retained void *) owner;
 }
 
@@ -331,6 +419,8 @@ void
 sc_device_toolbar_destroy(void *toolbar) {
     if (toolbar) {
         DMDeviceToolbar *owner = (__bridge_transfer DMDeviceToolbar *) toolbar;
+        [owner releaseKey];
+        [NSNotificationCenter.defaultCenter removeObserver:owner.resignObserver];
         objc_setAssociatedObject(owner.window, DMToolbarKey, nil, OBJC_ASSOCIATION_ASSIGN);
         if (--DMWindowCount == 0) { SDL_SetEventFilter(DMPreviousFilter, DMPreviousFilterData); }
         NSUInteger index = [owner.window.titlebarAccessoryViewControllers indexOfObject:owner.inputAccessory];

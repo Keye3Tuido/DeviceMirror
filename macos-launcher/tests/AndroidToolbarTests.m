@@ -6,6 +6,7 @@
 static struct sc_controller *last_controller;
 static NSMutableArray<NSString *> *sentTexts;
 static unsigned commands;
+static NSMutableArray<NSDictionary *> *keyEvents;
 static IMP realApplicationSendEvent;
 
 static NSString *captureText(NSString *text) {
@@ -44,7 +45,10 @@ sc_controller_push_msg(struct sc_controller *controller, const struct sc_control
         return true;
     }
     ++commands;
+    if (msg->type == SC_CONTROL_MSG_TYPE_ROTATE_DEVICE) { return true; }
     assert(msg->type == SC_CONTROL_MSG_TYPE_INJECT_KEYCODE);
+    [keyEvents addObject:@{@"action": @(msg->inject_keycode.action), @"code": @(msg->inject_keycode.keycode),
+                          @"repeat": @(msg->inject_keycode.repeat)}];
     return true;
 }
 
@@ -157,10 +161,33 @@ int main(void) {
         DMApplicationSendEvent = realApplicationSendEvent;
         [owners[1] sendKey:AKEYCODE_HOME];
         assert(commands == 2 && last_controller == &controllers[1]);
+        keyEvents = [NSMutableArray new];
+        commands = 0;
+        for (int i = 0; i < 2; ++i) {
+            NSToolbarItem *rotate = [owners[i] toolbar:owners[i].toolbar
+                itemForItemIdentifier:@"rotate" willBeInsertedIntoToolbar:YES];
+            assert([rotate.label isEqualToString:@"旋转"]);
+            [owners[i] press:rotate];
+            assert(last_controller == &controllers[i]);
+        }
+        assert(commands == 2);
+        [owners[0] beginKey:AKEYCODE_VOLUME_UP];
+        [owners[0] repeatKey]; [owners[0] repeatKey]; [owners[0] releaseKey];
+        [owners[0] releaseKey]; // Cancellation and mouse release must not send duplicate UPs.
+        assert(keyEvents.count == 4);
+        assert([keyEvents[0][@"action"] intValue] == AKEY_EVENT_ACTION_DOWN);
+        assert([keyEvents[1][@"repeat"] intValue] == 1 && [keyEvents[2][@"repeat"] intValue] == 2);
+        assert([keyEvents[3][@"action"] intValue] == AKEY_EVENT_ACTION_UP);
+        assert(last_controller == &controllers[0]);
+        [owners[1] beginKey:AKEYCODE_BACK];
+        [NSNotificationCenter.defaultCenter postNotificationName:NSWindowDidResignKeyNotification object:owners[1].window];
+        assert(owners[1].heldKey == nil && [keyEvents.lastObject[@"action"] intValue] == AKEY_EVENT_ACTION_UP);
+        [owners[0] beginKey:AKEYCODE_HOME];
         for (int i = 0; i < 2; ++i) {
             sc_device_toolbar_destroy(handles[i]);
             SDL_DestroyWindow(windows[i]);
         }
+        assert([keyEvents.lastObject[@"action"] intValue] == AKEY_EVENT_ACTION_UP);
         assert(NSApp.activationPolicy == NSApplicationActivationPolicyProhibited);
         assert(!NSApp.active);
         SDL_Quit();

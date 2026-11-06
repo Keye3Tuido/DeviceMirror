@@ -4,7 +4,7 @@
 
 | 组件 | 固定版本 / 来源 | 许可与处理 |
 |---|---|---|
-| scrcpy 客户端及 Android 服务 | 5.0.1，Genymobile/scrcpy，a60891aea193d92e7e5c3942700eca63f9d19a5f | Apache-2.0；保留 LICENSE、原源码与原始图标归属；客户端从本仓库修改后的源码编译 |
+| scrcpy 客户端及 Android 服务 | 5.0.1，Genymobile/scrcpy，a60891aea193d92e7e5c3942700eca63f9d19a5f | Apache-2.0；保留 LICENSE、原源码与原始图标归属；客户端及 Android 服务均从本仓库修改后的源码编译 |
 | WebDriverAgent | 16.15.3，appium/WebDriverAgent，02cb92f0e93c8b021443bcbb8eeb80932c113220；Git submodule 固定完整 SHA | BSD，完整许可随源码分发；固定子模块保持原样，打包时向 `FBTouchActionCommands.m` 追加自有扩展的导入，改动处附署名及许可标记。`macos-launcher/WDA/DMControlCommands.m` 为 Apache-2.0 自有代码，源码与许可随包附带 |
 | adb | nmeum/android-tools 37.0.0p1 及其固定 AOSP 源码 | Apache-2.0 及各源码内许可；从源码编译，保留完整源码归档。调整 BoringSSL 头文件优先级，关闭 mDNS，使用可替换的动态 libusb |
 | adb 的静态构建组件 | android-tools 归档内的 BoringSSL、fmt 及 AOSP 库 | 原 Apache、BSD、MIT、OpenSSL/ISC 等许可与版权头随完整源码归档保留 |
