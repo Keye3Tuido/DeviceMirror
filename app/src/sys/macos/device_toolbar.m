@@ -22,7 +22,7 @@
 
 - (NSArray<NSToolbarItemIdentifier> *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar {
     (void) toolbar;
-    return @[@"back", @"home", @"recents", NSToolbarFlexibleSpaceItemIdentifier,
+    return @[@"back", @"home", @"recents", @"send-text", NSToolbarFlexibleSpaceItemIdentifier,
              @"volume-down", @"volume-up", @"power", @"notifications"];
 }
 
@@ -38,6 +38,7 @@
         @"back": @[@"返回", @"chevron.backward", @(AKEYCODE_BACK)],
         @"home": @[@"主页", @"house", @(AKEYCODE_HOME)],
         @"recents": @[@"最近任务", @"square.on.square", @(AKEYCODE_APP_SWITCH)],
+        @"send-text": @[@"发送文本", @"text.bubble", @(0)],
         @"volume-down": @[@"音量减", @"speaker.minus", @(AKEYCODE_VOLUME_DOWN)],
         @"volume-up": @[@"音量加", @"speaker.plus", @(AKEYCODE_VOLUME_UP)],
         @"power": @[@"电源", @"power", @(AKEYCODE_POWER)],
@@ -53,6 +54,11 @@
     item.tag = [spec[2] integerValue];
     item.target = self;
     item.action = @selector(press:);
+    if ([identifier isEqualToString:@"send-text"]) {
+        item.action = @selector(showTextInput:);
+        item.visibilityPriority = NSToolbarItemVisibilityPriorityHigh;
+        item.toolTip = @"向此设备当前输入框发送文本，支持中文";
+    }
     return item;
 }
 
@@ -115,6 +121,28 @@
     self.input.stringValue = @"";
 }
 
+- (void)showTextInput:(id)sender {
+    (void)sender;
+    NSAlert *alert = [NSAlert new];
+    alert.messageText = @"向此设备发送文本";
+    alert.informativeText = @"先点击设备中的输入框，再输入或粘贴要发送的内容。发送会更新此设备剪贴板并粘贴。";
+    [alert addButtonWithTitle:@"发送"];
+    [alert addButtonWithTitle:@"取消"];
+    NSTextField *field = [NSTextField textFieldWithString:self.input.stringValue];
+    field.frame = NSMakeRect(0, 0, 360, 24);
+    field.placeholderString = @"输入或粘贴文本，支持中文";
+    field.accessibilityLabel = @"向此安卓设备发送文本";
+    alert.accessoryView = field;
+    alert.window.initialFirstResponder = field;
+    __weak DMDeviceToolbar *weakSelf = self;
+    [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response) {
+        DMDeviceToolbar *owner = weakSelf;
+        if (!owner || !owner.controller) { return; }
+        owner.input.stringValue = field.stringValue;
+        if (response == NSAlertFirstButtonReturn) { [owner sendText:nil]; }
+    }];
+}
+
 - (void)installInput {
     self.editMenu = [[NSMenuItem alloc] initWithTitle:@"编辑" action:nil keyEquivalent:@""];
     NSMenu *edit = [[NSMenu alloc] initWithTitle:@"编辑"];
@@ -158,6 +186,8 @@
         [row.leadingAnchor constraintEqualToAnchor:container.leadingAnchor constant:8],
         [row.trailingAnchor constraintEqualToAnchor:container.trailingAnchor constant:-8],
         [row.centerYAnchor constraintEqualToAnchor:container.centerYAnchor],
+        // The titlebar host measures fittingSize rather than the initial frame.
+        [container.heightAnchor constraintEqualToConstant:42],
         [self.input.widthAnchor constraintGreaterThanOrEqualToConstant:80],
         [keys.widthAnchor constraintEqualToConstant:104]
     ]];
@@ -214,5 +244,6 @@ bool
 sc_device_toolbar_is_editing(void *toolbar) {
     if (!toolbar) { return false; }
     DMDeviceToolbar *owner = (__bridge DMDeviceToolbar *)toolbar;
-    return owner.input.currentEditor != nil;
+    // SDL must not forward draft keystrokes from the text sheet to Android.
+    return owner.input.currentEditor != nil || owner.window.attachedSheet != nil;
 }

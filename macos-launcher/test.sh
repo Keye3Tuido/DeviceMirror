@@ -12,4 +12,8 @@ xcrun swiftc -swift-version 5 Sources/AndroidCore.swift Sources/USBMux.swift Dev
 .build/service-tests
 xcrun cc -std=c11 -Wall -Wextra tests/EdgeGeometryTests.c -o .build/edge-tests
 .build/edge-tests
+xcrun clang -fobjc-arc -I../app/src -I.build/scrcpy/app -I.build/ffmpeg-install/include \
+    -I/opt/homebrew/include tests/AndroidToolbarTests.m -framework AppKit \
+    -L/opt/homebrew/lib -lSDL3 -o .build/toolbar-tests
+.build/toolbar-tests
 /usr/bin/python3 -m unittest discover -s tests -p 'test_*.py' -v

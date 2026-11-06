@@ -362,7 +362,7 @@ struct HelpView: View {
             Text("Android 操作说明").font(.title2.bold())
             Text("投屏窗口顶部提供返回、主页、最近任务、音量、电源和通知按键。先在设备列表选中设备，再设置画质与帧率并开始投屏。")
                 .font(.callout).foregroundStyle(.secondary)
-            Text("先点击设备输入框，再在文字栏输入并发送，支持中文。发送会更新设备剪贴板并粘贴；用“按键”菜单发送回车、退格、Tab 和方向键。")
+            Text("先点击设备输入框，再点投屏窗口顶部“发送文本”，输入内容后发送；也可使用文字栏，支持中文。发送会更新设备剪贴板并粘贴；用“按键”菜单发送回车、退格、Tab 和方向键。")
                 .font(.callout).foregroundStyle(.secondary)
             Text("从画面四周的白色留白按住鼠标拖入，可模拟屏幕边缘手势。设备列表中的“记录系统日志”按设备启停录制，窗口“日志”打开运行日志。")
                 .font(.callout).foregroundStyle(.secondary)
