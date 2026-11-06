@@ -35,13 +35,13 @@ static NSEvent *keyEvent(NSWindow *window, NSEventType type, NSString *text, uns
         context:nil characters:text charactersIgnoringModifiers:text isARepeat:NO keyCode:code];
 }
 
-static void holdButton(DMHeldKeyButton *button, double duration, BOOL cancel) {
+static void holdButton(DMHeldKeyButton *button, double duration, BOOL cancel, BOOL dragIntoMenu) {
     NSWindow *host = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 200, 40)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     host.contentView = button;
     NSPoint point = [button convertPoint:NSMakePoint(NSMidX(button.bounds), NSMidY(button.bounds)) toView:nil];
     double start = NSProcessInfo.processInfo.systemUptime;
-    NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:point modifierFlags:0
+    NSEvent *down = [NSEvent mouseEventWithType:(dragIntoMenu ? NSEventTypeLeftMouseDragged : NSEventTypeLeftMouseDown) location:point modifierFlags:0
         timestamp:start windowNumber:host.windowNumber context:nil eventNumber:100 clickCount:1 pressure:1];
     NSEvent *up = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:point modifierFlags:0
         timestamp:start+duration windowNumber:host.windowNumber context:nil eventNumber:101 clickCount:1 pressure:0];
@@ -64,7 +64,8 @@ static void holdButton(DMHeldKeyButton *button, double duration, BOOL cancel) {
         }];
         [NSRunLoop.mainRunLoop addTimer:detach forMode:NSEventTrackingRunLoopMode];
     }
-    [button mouseDown:down];
+    if (dragIntoMenu) { [button mouseDragged:down]; }
+    else { [button mouseDown:down]; }
     [check invalidate]; [detach invalidate];
     double elapsed = NSProcessInfo.processInfo.systemUptime-start;
     dispatch_group_wait(posted, DISPATCH_TIME_FOREVER);
@@ -249,11 +250,12 @@ int main(void) {
                 assert([keyEvents[0][@"code"] integerValue] == item.tag);
                 [keyEvents removeAllObjects]; commands = 0;
                 if ([item.itemIdentifier isEqualToString:@"volume-up"]) {
-                    holdButton(menuButton, 0.7, NO);
-                    holdButton((DMHeldKeyButton *)item.view, 0.7, NO);
-                    holdButton(menuButton, 0.03, NO);
-                    holdButton(copiedButton, 0.7, NO);
-                    holdButton(menuButton, 0.7, YES);
+                    holdButton(menuButton, 0.7, NO, NO);
+                    holdButton((DMHeldKeyButton *)item.view, 0.7, NO, NO);
+                    holdButton(menuButton, 0.03, NO, NO);
+                    holdButton(copiedButton, 0.7, NO, NO);
+                    holdButton(menuButton, 0.7, YES, NO);
+                    holdButton(copiedButton, 0.7, NO, YES);
                 }
             }
             assert(!owners[i].window.visible);

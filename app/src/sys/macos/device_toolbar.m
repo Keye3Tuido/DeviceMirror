@@ -34,6 +34,10 @@
         [self.enclosingMenuItem.menu cancelTracking];
     }
 }
+// Non-sticky menus deliver drags when the user holds the overflow button.
+- (void)mouseDragged:(NSEvent *)event {
+    if (!self.trackingKey) { [self mouseDown:event]; }
+}
 - (void)viewDidMoveToWindow {
     [super viewDidMoveToWindow];
     if (!self.window && self.trackingKey) { self.releasePress(); }
