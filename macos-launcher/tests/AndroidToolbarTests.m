@@ -2,12 +2,34 @@
  * Copyright 2026 Keye3Tuido
  */
 #include "sys/macos/device_toolbar.m"
+#include "events.h"
 
 static struct sc_controller *last_controller;
 static NSMutableArray<NSString *> *sentTexts;
 static unsigned commands;
 static NSMutableArray<NSDictionary *> *keyEvents;
 static IMP realApplicationSendEvent;
+
+static unsigned renderedFrames;
+static void refreshFrame(void *userdata, const SDL_Event *event) {
+    assert(NSThread.isMainThread && event->type == SC_EVENT_NEW_FRAME);
+    assert(userdata);
+    ++renderedFrames;
+}
+static void framesDuringTracking(void *handle) {
+    sc_device_toolbar_set_frame_handler(handle, refreshFrame, handle);
+    SDL_Event frame = {0}; frame.type = SC_EVENT_NEW_FRAME;
+    SDL_Event unrelated = {0}; unrelated.type = SC_EVENT_NEW_FRAME+200;
+    assert(SDL_PushEvent(&frame) && SDL_PushEvent(&unrelated));
+    unsigned before = renderedFrames;
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:0.1];
+    while (deadline.timeIntervalSinceNow > 0) {
+        [NSRunLoop.mainRunLoop runMode:NSEventTrackingRunLoopMode beforeDate:deadline];
+    }
+    assert(renderedFrames == before+1); // The mirror must refresh before the menu closes.
+    assert(SDL_PeepEvents(&unrelated, 1, SDL_GETEVENT,
+                         SC_EVENT_NEW_FRAME+200, SC_EVENT_NEW_FRAME+200) == 1);
+}
 
 static NSString *captureText(NSString *text) {
     @synchronized(sentTexts) { [sentTexts addObject:text]; }
@@ -50,9 +72,13 @@ static void holdButton(DMHeldKeyButton *button, double duration, BOOL cancel, BO
         [NSThread sleepForTimeInterval:duration];
         [NSApp postEvent:up atStart:YES];
     });
-    NSTimer *check = [NSTimer timerWithTimeInterval:0.02 repeats:NO block:^(NSTimer *timer) {
+    unsigned framesBefore = renderedFrames;
+    SDL_Event frame = {0}; frame.type = SC_EVENT_NEW_FRAME;
+    assert(SDL_PushEvent(&frame));
+    NSTimer *check = [NSTimer timerWithTimeInterval:(duration > 0.5 ? 0.1 : 0.02) repeats:NO block:^(NSTimer *timer) {
         (void)timer;
         assert(keyEvents.count == 1); // DOWN is sent while the mouse is still held.
+        if (duration > 0.5) { assert(renderedFrames > framesBefore); }
         assert([keyEvents.lastObject[@"action"] intValue] == AKEY_EVENT_ACTION_DOWN);
     }];
     [NSRunLoop.mainRunLoop addTimer:check forMode:NSEventTrackingRunLoopMode];
@@ -139,6 +165,7 @@ int main(void) {
                 assert(!owners[i].window.visible);
             }
         }
+        framesDuringTracking(handles[0]);
         sentTexts = [NSMutableArray new];
         DMTextRunner = captureText;
         NSString *text = @"中文 English 😀";
@@ -212,6 +239,7 @@ int main(void) {
         assert(commands == 2 && last_controller == &controllers[1]);
         keyEvents = [NSMutableArray new];
         commands = 0;
+        CGFloat titleColumn = -1, iconColumn = -1;
         // AppKit forwards overflow menu selections with NSMenuItem as sender.
         // Exercise its real dispatch, including keys hidden by a narrow window.
         for (int i = 0; i < 2; ++i) {
@@ -225,6 +253,12 @@ int main(void) {
                 assert([menu.view isKindOfClass:DMHeldKeyButton.class]);
                 DMHeldKeyButton *menuButton = (DMHeldKeyButton *)menu.view;
                 assert(menuButton.image && [menuButton.title isEqualToString:item.label]);
+                NSRect titleRect = [menuButton.cell titleRectForBounds:menuButton.bounds];
+                NSRect iconRect = [menuButton.cell imageRectForBounds:menuButton.bounds];
+                if (titleColumn < 0) { titleColumn = NSMinX(titleRect); iconColumn = NSMidX(iconRect); }
+                assert(fabs(NSMinX(titleRect)-titleColumn) < 0.01);
+                assert(fabs(NSMidX(iconRect)-iconColumn) < 0.01);
+                assert(NSMaxX(iconRect)+4 <= NSMinX(titleRect));
                 assert(menuButton.press && menuButton.repeatPress && menuButton.releasePress);
                 NSMenuItem *copiedMenu = [menu copy];
                 DMHeldKeyButton *copiedButton = (DMHeldKeyButton *)copiedMenu.view;
@@ -285,10 +319,18 @@ int main(void) {
             SDL_DestroyWindow(windows[i]);
         }
         assert([keyEvents.lastObject[@"action"] intValue] == AKEY_EVENT_ACTION_UP);
+        unsigned beforeDestroy = renderedFrames;
+        SDL_Event pendingFrame = {0}; pendingFrame.type = SC_EVENT_NEW_FRAME;
+        assert(SDL_PushEvent(&pendingFrame));
+        NSDate *stopped = [NSDate dateWithTimeIntervalSinceNow:0.05];
+        while (stopped.timeIntervalSinceNow > 0) {
+            [NSRunLoop.mainRunLoop runMode:NSEventTrackingRunLoopMode beforeDate:stopped];
+        }
+        assert(renderedFrames == beforeDestroy);
         assert(NSApp.activationPolicy == NSApplicationActivationPolicyProhibited);
         assert(!NSApp.active);
         SDL_Quit();
-        puts("PASS: Android 菜单图标/菜单复制/鼠标长按与取消/原生点击坐标/输入隔离/独立设备/无前台窗口");
+        puts("PASS: Android 菜单列对齐/菜单复制/按住期间画面刷新/鼠标长按与取消/原生点击坐标/输入隔离/独立设备/无前台窗口");
     }
     return 0;
 }

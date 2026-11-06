@@ -4,6 +4,7 @@
  */
 #include "device_toolbar.h"
 #include "controller.h"
+#include "events.h"
 #include "util/log.h"
 #undef MIN
 #undef MAX
@@ -44,6 +45,25 @@
 }
 @end
 
+// Menu rows share columns even when SF Symbols have different widths.
+@interface DMHeldKeyMenuCell : NSButtonCell
+@end
+@implementation DMHeldKeyMenuCell
+- (NSRect)imageRectForBounds:(NSRect)bounds {
+    NSSize size = self.image.size;
+    CGFloat scale = MIN(18 / MAX(size.width, 1), 18 / MAX(size.height, 1));
+    size = NSMakeSize(size.width * scale, size.height * scale);
+    return NSMakeRect(NSMinX(bounds)+23-size.width/2, NSMidY(bounds)-size.height/2,
+                      size.width, size.height);
+}
+- (NSRect)titleRectForBounds:(NSRect)bounds {
+    NSRect rect = [super titleRectForBounds:bounds];
+    rect.origin.x = NSMinX(bounds)+42;
+    rect.size.width = MAX(0, NSMaxX(bounds)-8-rect.origin.x);
+    return rect;
+}
+@end
+
 // AppKit copies custom menu views through archiving; blocks are not archived.
 @interface DMHeldKeyMenuItem : NSMenuItem
 @end
@@ -73,6 +93,9 @@
 @property(nonatomic, strong) NSNumber *heldKey;
 @property(nonatomic, assign) unsigned keyRepeat;
 @property(nonatomic, strong) id resignObserver;
+@property(nonatomic, strong) NSTimer *trackingFrames;
+@property(nonatomic, assign) sc_device_toolbar_frame_handler frameHandler;
+@property(nonatomic, assign) void *frameContext;
 - (void)releaseKey;
 - (void)beginKey:(enum android_keycode)keycode;
 - (void)repeatKey;
@@ -246,6 +269,7 @@ static void DMInstallEventRouting(DMDeviceToolbar *owner) {
         menu.target = self;
         menu.tag = code;
         DMHeldKeyButton *menuButton = [[DMHeldKeyButton alloc] initWithFrame:NSMakeRect(0, 0, 160, 28)];
+        menuButton.cell = [[DMHeldKeyMenuCell alloc] initTextCell:spec[0]];
         menuButton.title = spec[0];
         menuButton.image = item.image;
         menuButton.imagePosition = NSImageLeft;
@@ -468,9 +492,34 @@ sc_device_toolbar_create(SDL_Window *window, struct sc_controller *controller) {
 }
 
 void
+sc_device_toolbar_set_frame_handler(void *toolbar,
+        sc_device_toolbar_frame_handler handler, void *context) {
+    if (!toolbar) { return; }
+    DMDeviceToolbar *owner = (__bridge DMDeviceToolbar *)toolbar;
+    [owner.trackingFrames invalidate];
+    owner.trackingFrames = nil;
+    owner.frameHandler = handler;
+    owner.frameContext = context;
+    if (!handler) { return; }
+    __weak DMDeviceToolbar *weakOwner = owner;
+    owner.trackingFrames = [NSTimer timerWithTimeInterval:1.0 / 60 repeats:YES block:^(NSTimer *timer) {
+        (void)timer;
+        DMDeviceToolbar *current = weakOwner;
+        if (!current || !current.frameHandler) { return; }
+        SDL_Event event;
+        // Peep only queued frames: pumping SDL here would re-enter native dispatch.
+        if (SDL_PeepEvents(&event, 1, SDL_GETEVENT, SC_EVENT_NEW_FRAME, SC_EVENT_NEW_FRAME) == 1) {
+            current.frameHandler(current.frameContext, &event);
+        }
+    }];
+    [NSRunLoop.mainRunLoop addTimer:owner.trackingFrames forMode:NSEventTrackingRunLoopMode];
+}
+
+void
 sc_device_toolbar_destroy(void *toolbar) {
     if (toolbar) {
         DMDeviceToolbar *owner = (__bridge_transfer DMDeviceToolbar *) toolbar;
+        sc_device_toolbar_set_frame_handler(toolbar, NULL, NULL);
         [owner releaseKey];
         [NSNotificationCenter.defaultCenter removeObserver:owner.resignObserver];
         objc_setAssociatedObject(owner.window, DMToolbarKey, nil, OBJC_ASSOCIATION_ASSIGN);

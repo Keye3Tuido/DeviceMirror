@@ -7,6 +7,13 @@
 #include <SDL3/SDL.h>
 struct sc_controller;
 
+typedef void (*sc_device_toolbar_frame_handler)(void *context, const SDL_Event *event);
+
+// Refresh only video-frame events on the UI thread during AppKit tracking.
+void
+sc_device_toolbar_set_frame_handler(void *toolbar,
+    sc_device_toolbar_frame_handler handler, void *context);
+
 void *
 sc_device_toolbar_create(SDL_Window *window, struct sc_controller *controller);
 

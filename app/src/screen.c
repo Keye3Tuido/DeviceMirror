@@ -18,6 +18,11 @@
 
 #ifdef __APPLE__
 #include "sys/macos/device_toolbar.h"
+
+static void
+sc_screen_toolbar_frame(void *context, const SDL_Event *event) {
+    sc_screen_handle_event(context, event);
+}
 #endif
 
 #define DISPLAY_MARGINS 96
@@ -722,6 +727,10 @@ sc_screen_init(struct sc_screen *screen,
     // Device Mirror: controls and text input target this screen's controller.
     screen->device_toolbar = params->camera ? NULL
         : sc_device_toolbar_create(screen->window, params->controller);
+    if (params->video) {
+        sc_device_toolbar_set_frame_handler(screen->device_toolbar,
+                                            sc_screen_toolbar_frame, screen);
+    }
 #endif
 
     // Initialize even if not used for simplicity
