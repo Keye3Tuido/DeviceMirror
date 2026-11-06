@@ -28,8 +28,32 @@
     }];
     repeat.fireDate = [NSDate dateWithTimeIntervalSinceNow:0.5];
     [NSRunLoop.mainRunLoop addTimer:repeat forMode:NSRunLoopCommonModes];
+    [NSRunLoop.mainRunLoop addTimer:repeat forMode:NSEventTrackingRunLoopMode];
     @try { [super mouseDown:event]; }
-    @finally { [repeat invalidate]; self.releasePress(); self.trackingKey = NO; }
+    @finally { [repeat invalidate]; self.releasePress(); self.trackingKey = NO;
+        [self.enclosingMenuItem.menu cancelTracking];
+    }
+}
+- (void)viewDidMoveToWindow {
+    [super viewDidMoveToWindow];
+    if (!self.window && self.trackingKey) { self.releasePress(); }
+}
+@end
+
+// AppKit copies custom menu views through archiving; blocks are not archived.
+@interface DMHeldKeyMenuItem : NSMenuItem
+@end
+@implementation DMHeldKeyMenuItem
+- (id)copyWithZone:(NSZone *)zone {
+    DMHeldKeyMenuItem *copy = [super copyWithZone:zone];
+    DMHeldKeyButton *source = (DMHeldKeyButton *)self.view;
+    DMHeldKeyButton *button = (DMHeldKeyButton *)copy.view;
+    button.press = source.press;
+    button.repeatPress = source.repeatPress;
+    button.releasePress = source.releasePress;
+    button.target = source.target;
+    button.action = source.action;
+    return copy;
 }
 @end
 
@@ -211,11 +235,29 @@ static void DMInstallEventRouting(DMDeviceToolbar *owner) {
         button.repeatPress = ^{ [owner repeatKey]; };
         button.releasePress = ^{ [owner releaseKey]; };
         item.view = button;
-        // Overflow selections send NSMenuItem, not the custom long-press view.
-        NSMenuItem *menu = [[NSMenuItem alloc] initWithTitle:spec[0]
+        // Native menu actions are discrete. A custom view preserves key holds.
+        NSMenuItem *menu = [[DMHeldKeyMenuItem alloc] initWithTitle:spec[0]
             action:@selector(press:) keyEquivalent:@""];
+        menu.image = item.image;
         menu.target = self;
         menu.tag = code;
+        DMHeldKeyButton *menuButton = [[DMHeldKeyButton alloc] initWithFrame:NSMakeRect(0, 0, 160, 28)];
+        menuButton.title = spec[0];
+        menuButton.image = item.image;
+        menuButton.imagePosition = NSImageLeft;
+        menuButton.alignment = NSTextAlignmentLeft;
+        menuButton.font = [NSFont menuFontOfSize:0];
+        menuButton.bordered = NO;
+        menuButton.autoresizingMask = NSViewWidthSizable;
+        menuButton.toolTip = button.toolTip;
+        menuButton.accessibilityLabel = spec[0];
+        menuButton.tag = code;
+        menuButton.target = self;
+        menuButton.action = @selector(keyClicked:);
+        menuButton.press = button.press;
+        menuButton.repeatPress = button.repeatPress;
+        menuButton.releasePress = button.releasePress;
+        menu.view = menuButton;
         item.menuFormRepresentation = menu;
     }
     if ([identifier isEqualToString:@"send-text"]) {

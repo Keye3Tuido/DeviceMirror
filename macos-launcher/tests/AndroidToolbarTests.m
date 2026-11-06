@@ -35,6 +35,54 @@ static NSEvent *keyEvent(NSWindow *window, NSEventType type, NSString *text, uns
         context:nil characters:text charactersIgnoringModifiers:text isARepeat:NO keyCode:code];
 }
 
+static void holdButton(DMHeldKeyButton *button, double duration, BOOL cancel) {
+    NSWindow *host = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 200, 40)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    host.contentView = button;
+    NSPoint point = [button convertPoint:NSMakePoint(NSMidX(button.bounds), NSMidY(button.bounds)) toView:nil];
+    double start = NSProcessInfo.processInfo.systemUptime;
+    NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:point modifierFlags:0
+        timestamp:start windowNumber:host.windowNumber context:nil eventNumber:100 clickCount:1 pressure:1];
+    NSEvent *up = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:point modifierFlags:0
+        timestamp:start+duration windowNumber:host.windowNumber context:nil eventNumber:101 clickCount:1 pressure:0];
+    dispatch_group_t posted = dispatch_group_create();
+    dispatch_group_async(posted, dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+        [NSThread sleepForTimeInterval:duration];
+        [NSApp postEvent:up atStart:YES];
+    });
+    NSTimer *check = [NSTimer timerWithTimeInterval:0.02 repeats:NO block:^(NSTimer *timer) {
+        (void)timer;
+        assert(keyEvents.count == 1); // DOWN is sent while the mouse is still held.
+        assert([keyEvents.lastObject[@"action"] intValue] == AKEY_EVENT_ACTION_DOWN);
+    }];
+    [NSRunLoop.mainRunLoop addTimer:check forMode:NSEventTrackingRunLoopMode];
+    NSTimer *detach = nil;
+    if (cancel) {
+        detach = [NSTimer timerWithTimeInterval:0.2 repeats:NO block:^(NSTimer *timer) {
+            (void)timer;
+            [button removeFromSuperview]; // Closing a menu removes its view.
+        }];
+        [NSRunLoop.mainRunLoop addTimer:detach forMode:NSEventTrackingRunLoopMode];
+    }
+    [button mouseDown:down];
+    [check invalidate]; [detach invalidate];
+    double elapsed = NSProcessInfo.processInfo.systemUptime-start;
+    dispatch_group_wait(posted, DISPATCH_TIME_FOREVER);
+    assert(elapsed >= (cancel ? 0.18 : duration-0.02));
+    assert(keyEvents.count >= (!cancel && duration > 0.5 ? 3 : 2));
+    if (cancel) { assert(keyEvents.count == 2); }
+    assert([keyEvents[0][@"action"] intValue] == AKEY_EVENT_ACTION_DOWN);
+    assert([keyEvents.lastObject[@"action"] intValue] == AKEY_EVENT_ACTION_UP);
+    for (NSUInteger n = 1; n+1 < keyEvents.count; ++n) {
+        assert([keyEvents[n][@"action"] intValue] == AKEY_EVENT_ACTION_DOWN);
+        assert([keyEvents[n][@"repeat"] unsignedIntegerValue] == n);
+    }
+    [keyEvents removeAllObjects]; commands = 0;
+    while ([NSApp nextEventMatchingMask:NSEventMaskLeftMouseUp untilDate:NSDate.date
+        inMode:NSEventTrackingRunLoopMode dequeue:YES]) {}
+    assert(!host.visible && !button.trackingKey);
+}
+
 bool
 sc_controller_push_msg(struct sc_controller *controller, const struct sc_control_msg *msg) {
     last_controller = controller;
@@ -172,6 +220,22 @@ int main(void) {
                 if (item.tag <= 0) { continue; }
                 NSMenuItem *menu = item.menuFormRepresentation;
                 assert(menu);
+                assert(menu.image && menu.image == item.image);
+                assert([menu.view isKindOfClass:DMHeldKeyButton.class]);
+                DMHeldKeyButton *menuButton = (DMHeldKeyButton *)menu.view;
+                assert(menuButton.image && [menuButton.title isEqualToString:item.label]);
+                assert(menuButton.press && menuButton.repeatPress && menuButton.releasePress);
+                NSMenuItem *copiedMenu = [menu copy];
+                DMHeldKeyButton *copiedButton = (DMHeldKeyButton *)copiedMenu.view;
+                assert([copiedButton isKindOfClass:DMHeldKeyButton.class]);
+                assert(copiedButton.press && copiedButton.repeatPress && copiedButton.releasePress);
+                menuButton.press(); menuButton.repeatPress(); menuButton.releasePress();
+                assert(keyEvents.count == 3);
+                assert([keyEvents[0][@"code"] integerValue] == item.tag);
+                assert([keyEvents[1][@"repeat"] intValue] == 1);
+                assert([keyEvents[2][@"action"] intValue] == AKEY_EVENT_ACTION_UP);
+                assert(last_controller == &controllers[i]);
+                [keyEvents removeAllObjects]; commands = 0;
                 assert([NSApp sendAction:menu.action to:menu.target from:menu]);
                 assert(keyEvents.count == 2);
                 assert([keyEvents[0][@"code"] integerValue] == item.tag);
@@ -184,6 +248,13 @@ int main(void) {
                 assert(keyEvents.count == 2);
                 assert([keyEvents[0][@"code"] integerValue] == item.tag);
                 [keyEvents removeAllObjects]; commands = 0;
+                if ([item.itemIdentifier isEqualToString:@"volume-up"]) {
+                    holdButton(menuButton, 0.7, NO);
+                    holdButton((DMHeldKeyButton *)item.view, 0.7, NO);
+                    holdButton(menuButton, 0.03, NO);
+                    holdButton(copiedButton, 0.7, NO);
+                    holdButton(menuButton, 0.7, YES);
+                }
             }
             assert(!owners[i].window.visible);
         }
@@ -215,7 +286,7 @@ int main(void) {
         assert(NSApp.activationPolicy == NSApplicationActivationPolicyProhibited);
         assert(!NSApp.active);
         SDL_Quit();
-        puts("PASS: Android 原生点击坐标/单次按键提交/本地输入隔离/无剪贴板命令/独立设备/无前台窗口");
+        puts("PASS: Android 菜单图标/菜单复制/鼠标长按与取消/原生点击坐标/输入隔离/独立设备/无前台窗口");
     }
     return 0;
 }
