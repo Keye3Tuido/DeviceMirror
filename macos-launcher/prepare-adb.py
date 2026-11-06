@@ -52,12 +52,20 @@ def build():
     work.mkdir(parents=True, exist_ok=True)
     usb = work / 'libusb-1.0.30'
     install = work / 'usb-install'
-    if not (install / 'lib/libusb-1.0.0.dylib').exists():
+    usb_configuration = install / '.device-mirror-config'
+    expected_configuration = 'macos26-pipe-fallback-v2-availability\n'
+    if (not (install / 'lib/libusb-1.0.0.dylib').exists() or not usb_configuration.exists()
+            or usb_configuration.read_text() != expected_configuration):
         run('tar', '-xf', sources['libusb-1.0.30.tar.bz2'], '-C', work)
-        run('./configure', '--disable-static', '--enable-shared', '--disable-dependency-tracking',
+        if (usb / 'Makefile').exists():
+            run('make', 'distclean', cwd=usb)
+        # New SDKs declare pipe2 as a weak import even when macOS lacks it.
+        # Autoconf's link check succeeds; select libusb's pipe/fcntl fallback.
+        run('/usr/bin/env', 'ac_cv_func_pipe2=no', 'CFLAGS=-O2 -Werror=unguarded-availability-new', './configure', '--disable-static', '--enable-shared', '--disable-dependency-tracking',
             '--prefix=' + str(install), cwd=usb)
         run('make', '-j6', cwd=usb)
         run('make', 'install', cwd=usb)
+        usb_configuration.write_text(expected_configuration)
     ENV['PKG_CONFIG_PATH'] = str(install / 'lib/pkgconfig')
     source = work / 'android-tools-37.0.0p1'
     if not source.exists():
@@ -140,7 +148,7 @@ def prepare(app):
     shutil.copy2(__file__, notices / 'adb-build.py')
     (notices / 'SOURCE.json').write_text(json.dumps({
         'version': '37.0.0p1', 'source': ARCHIVES,
-        'changes': 'Homebrew header order; mDNS disabled; shared replaceable libusb; paths rewritten; local code signing',
+        'changes': 'Homebrew header order; mDNS disabled; shared replaceable libusb with pipe/fcntl fallback (pipe2 disabled for macOS 26); paths rewritten; local code signing',
         'libraries': {name: str(path) for name, path in copied.items()},
     }, indent=2) + '\n')
 

@@ -9,7 +9,7 @@
 | iOS 实时输入原生通道 | ipb `8c227a10710dad479852aa0203de729fed57471b`；facebook/idb `595884395c01fe1e8056a45a481de8310875ce87` | MIT；按原生服务用途改写，来源、改动说明及完整许可位于 `third_party/ios-control/`，随 app 分发；不复制 Apple 框架 |
 | adb | nmeum/android-tools 37.0.0p1 及其固定 AOSP 源码 | Apache-2.0 及各源码内许可；从源码编译，保留完整源码归档。调整 BoringSSL 头文件优先级，关闭 mDNS，使用可替换的动态 libusb |
 | adb 的静态构建组件 | android-tools 归档内的 BoringSSL、fmt 及 AOSP 库 | 原 Apache、BSD、MIT、OpenSSL/ISC 等许可与版权头随完整源码归档保留 |
-| libusb | 1.0.30，libusb 官方源码 | LGPL-2.1-or-later；从固定源码编译为独立 dylib，附完整对应源码、许可与构建脚本，可替换并重新签名 |
+| libusb | 1.0.30，libusb 官方源码 | LGPL-2.1-or-later；从固定源码编译为独立 dylib，使用 pipe/fcntl 兼容路径（禁用 pipe2）；附完整对应源码、许可与构建脚本，可替换并重新签名 |
 | adb 的动态依赖 | protobuf 36.2、Abseil 20260817.0、Brotli 1.2.1、LZ4 1.10.0、Zstd 1.5.7；GoogleTest 1.18.0 头文件 | BSD、Apache-2.0、MIT 等许可；附实际打包版本的许可证、Homebrew 版本与来源记录。protobuf 的 utf8_range 另附原 MIT 许可 |
 | FFmpeg | n9.0.2，官方 FFmpeg/FFmpeg 源码 | 此构建为 LGPL-2.1-or-later，禁用 GPL、nonfree、version3 与自动探测；使用独立 dylib，随包附完整对应源码、配置及构建脚本 |
 | SDL | 3.4.16，Homebrew 官方 sdl3 配方 | zlib，保留完整 LICENSE；动态链接 |
@@ -32,7 +32,7 @@ codesign --force --sign - '/path/to/Device Mirror.app'
 
 发布包须保留 NOTICE、所有许可证、对应源代码及构建文件。adb 的源码、构建脚本、依赖许可证及版本记录位于 `ThirdParty/Android-tools/`。第三方商标及其他权利由各权利人保留。
 
-libusb 同样允许为调试库修改而进行逆向工程，替换位置为 `Contents/Frameworks/libusb-1.0.0.dylib`。对应源码为 `ThirdParty/Android-tools/libusb-1.0.30.tar.bz2`，可解压后执行 `./configure --disable-static --enable-shared --prefix=/tmp/libusb-install && make && make install`，再替换动态库、恢复 `@loader_path/libusb-1.0.0.dylib` 安装名并重新签名。完整构建参数见同目录 `adb-build.py`。所有 LGPL 库使用同一 ABI 的替换版本。
+libusb 同样允许为调试库修改而进行逆向工程，替换位置为 `Contents/Frameworks/libusb-1.0.0.dylib`。对应源码为 `ThirdParty/Android-tools/libusb-1.0.30.tar.bz2`，可解压后执行 `ac_cv_func_pipe2=no ./configure --disable-static --enable-shared --prefix=/tmp/libusb-install && make && make install`，再替换动态库、恢复 `@loader_path/libusb-1.0.0.dylib` 安装名并重新签名。完整构建参数见同目录 `adb-build.py`。所有 LGPL 库使用同一 ABI 的替换版本。
 
 ## 校验
 

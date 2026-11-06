@@ -100,6 +100,8 @@ python3 macos-launcher/verify-bundle.py "Device Mirror.app"
 
 输出为仓库根目录的 `Device Mirror.app`；替换前需先退出正在运行的同路径应用。应用只有一个图形入口，内部辅助程序位于 `Contents/Helpers/`，动态库位于 `Contents/Frameworks/`。构建脚本从空目录组装，从源码编译 scrcpy 客户端与服务端、原生控制服务和自有 Android 文本输入组件，打包 adb、WDA 源码、LGPL FFmpeg 动态库及对应源码、配置和许可证，最后验证签名。
 
+`verify-bundle.py` 在独立端口启动全新的 adb 服务并查询设备，避免已运行的系统 adb 掩盖内置服务的启动故障。
+
 `test.sh` 检查设备解析、命令参数、文字传输、超时清理、MJPEG 分包、iOS 实时按下／移动／松开、取消、版本门槛、有界移动队列和 HID 报文、Android 边缘坐标、日志进程隔离、USB 转发隔离、签名团队与描述文件，以及 WDA 打包时的版权保留和缓存更新。iOS 画面事件测试直接调用事件处理方法；Android 测试创建隐藏窗口，检查窄窗布局、原生鼠标坐标换算、本地输入隔离、一次按键一次提交与设备隔离；文本服务测试覆盖 Unicode、输入法恢复、缺少焦点、应用拒绝和结果不确定时禁止自动重发。虚拟按键检查覆盖即时按下／松开、单次提交、取消、Android 重复事件、窗口失焦释放及实例隔离。测试应用禁止激活，不向桌面发送输入。
 
 ## 验证范围
@@ -111,6 +113,7 @@ python3 macos-launcher/verify-bundle.py "Device Mirror.app"
 | macOS 26.6.2 / Xcode 27.1 | 所需 CoreDevice、CoreSimulator、AVConference 接口可加载；Swift 与原生输入服务可编译 |
 | iPad Air 4 / iPadOS 26.3 | 原生服务拒绝启用控制并返回需要 27+；不发送触摸或设备按键 |
 | iOS 26.5 模拟器 | 拒绝启用控制；设备列表标记仅观看 |
+| app 兼容性检查 | 98 个原生组件的 arm64 架构与 macOS 26.0 部署目标；独立端口首次启动 adb；只读包与含空格路径；无 Xcode 时仍可列举可用设备；精简 PATH 下运行；签名及压缩包解压后检查 |
 | 本地回归 | 按下与移动在松开前交给传输层；取消和坐标变化释放；不支持设备不发送输入；移动合并保留顺序；58 字节 HID、主页边缘位和 XPC 整数类型检查 |
 | Android | 保留既有实时触摸、独立日志和文本组件；本地坐标、输入、队列与实例隔离回归 |
 
