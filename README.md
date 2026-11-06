@@ -1,238 +1,35 @@
-> [!WARNING]
-> **This GitHub repo (<https://github.com/Genymobile/scrcpy>) is the only official
-source for the project. Do not download releases from random websites, even if
-their name contains `scrcpy`.**
+# Device Mirror
 
-# scrcpy (v5.0.1)
+Device Mirror 是适用于 Apple Silicon / macOS 26 的本地设备投屏与控制程序，支持 Android、iPhone、iPad 和 iOS 模拟器。每台设备使用独立窗口，可以同时连接多台设备。
 
-<img src="app/data/scrcpy.svg" width="128" height="128" alt="scrcpy" align="right" />
+## 开始使用
 
-_pronounced "**scr**een **c**o**py**"_
+打开仓库根目录的 `Device Mirror.app`。应用内含 adb、scrcpy、原生控制服务及所需动态库，可移到“应用程序”等目录运行，日常使用不依赖源码目录或 Python。iOS USB 操控和模拟器功能仍需本机安装完整 Xcode；USB 观看真机镜像使用 macOS 系统采集功能。
 
-This application mirrors Android devices (video and audio) connected via USB or
-[TCP/IP](doc/connection.md#tcpip-wireless) and allows control using the
-computer's keyboard and mouse. It does not require _root_ access or an app
-installed on the device. It works on _Linux_, _Windows_, and _macOS_.
+| 设备与用途 | 连接条件 | 操作入口 |
+|---|---|---|
+| Android 投屏与操控 | USB 调试及设备授权 | Android → 选中设备 → 开始投屏 |
+| iPhone / iPad 观看镜像 | USB 连接、信任电脑、macOS 采集权限 | iOS → USB 真机 → 查看镜像 |
+| iPhone / iPad USB 操控 | 完整 Xcode、开发团队、开发者模式及测试认证 | iOS → 配置 Apple 账号 → USB 操控 → 连接 |
+| iOS 模拟器投屏与操控 | 完整 Xcode 和 iOS Runtime | iOS → 选择模拟器 → 启动并连接 |
 
-[![Linux](https://img.shields.io/badge/Linux-download-orange?style=for-the-badge&logo=linux)](doc/linux.md)&nbsp;
-[![Windows](https://img.shields.io/badge/Windows-download-blue?style=for-the-badge&logo=windows)](doc/windows.md)&nbsp;
-[![macOS](https://img.shields.io/badge/macOS-download-brightgreen?style=for-the-badge&logo=apple)](doc/macos.md)&nbsp;
+Android 支持点击、滑动、滚轮、键盘、中文文字发送、虚拟设备按键和按设备记录 logcat。画面四周的白色留白可用于从屏幕外划入。
 
-![screenshot](assets/screenshot-debian-600.jpg)
+iOS USB 操控与模拟器支持点击、普通滑动、长按、文字输入、返回、主页、多任务及锁屏；真机另有音量键。滑动与长按在松开鼠标后按记录的轨迹和停顿时间重放，单次最长 30 秒。返回优先点击标准导航栏返回按钮，其次识别明确标注“返回／Back”等名称的控件，无可用控件时尝试收起屏幕键盘。iOS 没有全局返回键，未标注的自定义控件需要直接点击；系统弹窗应先处理。iOS 不将边缘滑入识别为导航命令，留白起点和滚轮不发送触摸操作。
 
-It focuses on:
+iOS 控制使用 XCTest / WebDriverAgent，响应速度受自动化接口及画面回传影响；不传输 iOS 音频。
 
- - **lightness**: native, displays only the device screen
- - **performance**: 30~120fps, depending on the device
- - **quality**: 1920×1080 or above
- - **low latency**: [35~70ms][lowlatency]
- - **low startup time**: ~1 second to display the first image
- - **non-intrusiveness**: nothing is left installed on the Android device
- - **user benefits**: no account, no ads, no internet required
- - **freedom**: free and open source software
+关闭设备窗口会停止该设备会话；⌘1 打开设备列表，⌘Q 退出全部会话。
 
-[lowlatency]: https://github.com/Genymobile/scrcpy/pull/646
+## 使用与构建资料
 
-Its features include:
- - [audio forwarding](doc/audio.md) (Android 11+)
- - [recording](doc/recording.md)
- - [virtual display](doc/virtual-display.md)
- - mirroring with [Android device screen off](doc/device.md#turn-screen-off)
- - [copy-paste](doc/control.md#copy-paste) in both directions
- - [configurable quality](doc/video.md)
- - [camera mirroring](doc/camera.md) (Android 12+)
- - [mirroring as a webcam (V4L2)](doc/v4l2.md) (Linux-only)
- - physical [keyboard][hid-keyboard] and [mouse][hid-mouse] simulation (HID)
- - [gamepad](doc/gamepad.md) support
- - [OTG mode](doc/otg.md)
- - and more…
+- [连接、操作、日志和构建](macos-launcher/README.md)
+- [常见问题与故障处理](FAQ.md)
+- [版权、依赖及分发要求](THIRD_PARTY.md) · [NOTICE](NOTICE)
+- [scrcpy 上游项目](https://github.com/Genymobile/scrcpy)：Android 镜像与控制核心。
 
-[hid-keyboard]: doc/keyboard.md#physical-keyboard-simulation
-[hid-mouse]: doc/mouse.md#physical-mouse-simulation
+本地应用约 65 MB，使用原生 SwiftUI / AppKit，采用本地签名，尚未进行 Developer ID 公证。Intel 和其他 macOS 版本尚未验证。GitHub Pages 可托管介绍与下载页面；完整投屏和操控需运行本地应用。
 
-## Prerequisites
+## 许可与来源
 
-The Android device requires at least API 21 (Android 5.0).
-
-[Audio forwarding](doc/audio.md) is supported for API >= 30 (Android 11+).
-
-Make sure you [enabled USB debugging][enable-adb] on your device(s).
-
-[enable-adb]: https://developer.android.com/studio/debug/dev-options#enable
-
-On some devices (especially Xiaomi), you might get the following error:
-
-```
-Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.
-```
-
-In that case, you need to enable [an additional option][control] `USB debugging
-(Security Settings)` (this is an item different from `USB debugging`) to control
-it using a keyboard and mouse. Rebooting the device is necessary once this
-option is set.
-
-[control]: https://github.com/Genymobile/scrcpy/issues/70#issuecomment-373286323
-
-Note that USB debugging is not required to run scrcpy in [OTG mode](doc/otg.md).
-
-
-## Get the app
-
- - [Linux](doc/linux.md)
- - [Windows](doc/windows.md) (read [how to run](doc/windows.md#run))
- - [macOS](doc/macos.md)
-
-
-## Must-know tips
-
- - [Reducing resolution](doc/video.md#size) may greatly improve performance
-   (`scrcpy -m1024`)
- - [_Right-click_](doc/mouse.md#mouse-bindings) triggers `BACK`
- - [_Middle-click_](doc/mouse.md#mouse-bindings) triggers `HOME`
- - <kbd>Alt</kbd>+<kbd>f</kbd> toggles [fullscreen](doc/window.md#fullscreen)
- - There are many other [shortcuts](doc/shortcuts.md)
-
-
-## Usage examples
-
-There are a lot of options, [documented](#user-documentation) in separate pages.
-Here are just some common examples.
-
- - Capture the screen in H.265 (better quality), limit the size to 1920, limit
-   the frame rate to 60fps, disable audio, and control the device by simulating
-   a physical keyboard:
-
-    ```bash
-    scrcpy --video-codec=h265 --max-size=1920 --max-fps=60 --no-audio --keyboard=uhid
-    scrcpy --video-codec=h265 -m1920 --max-fps=60 --no-audio -K  # short version
-    ```
-
- - Start VLC in a new virtual display (separate from the device display):
-
-    ```bash
-    scrcpy --new-display=1920x1080 --start-app=org.videolan.vlc
-    ```
-
- - Start VLC in a new _flex_ display using H.265 with a bitrate of 16 Mbps,
-   while keeping the display active so it does not turn off:
-
-    ```bash
-    scrcpy --new-display -x --keep-active --start-app=org.videolan.vlc --video-codec=h265 -b16M
-    ```
-
- - Record the device camera in H.265 at 1920x1080 (and microphone) to an MP4
-   file:
-
-    ```bash
-    scrcpy --video-source=camera --video-codec=h265 --camera-size=1920x1080 --record=file.mp4
-    ```
-
- - Capture the device front camera and expose it as a webcam on the computer (on
-   Linux):
-
-    ```bash
-    scrcpy --video-source=camera --camera-size=1920x1080 --camera-facing=front --v4l2-sink=/dev/video2 --no-playback
-    ```
-
- - Control the device without mirroring by simulating a physical keyboard and
-   mouse (USB debugging not required):
-
-    ```bash
-    scrcpy --otg
-    ```
-
- - Control the device using gamepads plugged into the computer:
-
-    ```bash
-    scrcpy --gamepad=uhid
-    scrcpy -G  # short version
-    ```
-
-## User documentation
-
-The application provides a lot of features and configuration options. They are
-documented in the following pages:
-
- - [Connection](doc/connection.md)
- - [Video](doc/video.md)
- - [Audio](doc/audio.md)
- - [Control](doc/control.md)
- - [Keyboard](doc/keyboard.md)
- - [Mouse](doc/mouse.md)
- - [Gamepad](doc/gamepad.md)
- - [Device](doc/device.md)
- - [Window](doc/window.md)
- - [Recording](doc/recording.md)
- - [Virtual display](doc/virtual-display.md)
- - [Tunnels](doc/tunnels.md)
- - [OTG](doc/otg.md)
- - [Camera](doc/camera.md)
- - [Video4Linux](doc/v4l2.md)
- - [Shortcuts](doc/shortcuts.md)
-
-
-## Resources
-
- - [FAQ](FAQ.md)
- - [Translations][wiki] (not necessarily up to date)
- - [Build instructions](doc/build.md)
- - [Developers](doc/develop.md)
- - [Verify release signatures](doc/verify-release.md)
-
-[wiki]: https://github.com/Genymobile/scrcpy/wiki
-
-
-## Articles
-
-- [Introducing scrcpy][article-intro]
-- [Scrcpy now works wirelessly][article-tcpip]
-- [Scrcpy 2.0, with audio][article-scrcpy2]
-
-[article-intro]: https://blog.rom1v.com/2018/03/introducing-scrcpy/
-[article-tcpip]: https://www.genymotion.com/blog/open-source-project-scrcpy-now-works-wirelessly/
-[article-scrcpy2]: https://blog.rom1v.com/2023/03/scrcpy-2-0-with-audio/
-
-## Contact
-
-You can open an [issue] for bug reports, feature requests or general questions.
-
-For bug reports, please read the [FAQ](FAQ.md) first, you might find a solution
-to your problem immediately.
-
-[issue]: https://github.com/Genymobile/scrcpy/issues
-
-You can also use:
-
- - Reddit: [`r/scrcpy`](https://www.reddit.com/r/scrcpy)
- - BlueSky: [`@scrcpy.bsky.social`](https://bsky.app/profile/scrcpy.bsky.social)
- - Twitter: [`@scrcpy_app`](https://twitter.com/scrcpy_app)
-
-
-## Donate
-
-I'm [@rom1v](https://github.com/rom1v), the author and maintainer of _scrcpy_.
-
-If you appreciate this application, you can [support my open source
-work][donate]:
- - [GitHub Sponsors](https://github.com/sponsors/rom1v)
- - [Liberapay](https://liberapay.com/rom1v/)
- - [PayPal](https://paypal.me/rom2v)
-
-[donate]: https://blog.rom1v.com/about/#support-my-open-source-work
-
-## License
-
-    Copyright (C) 2018 Genymobile
-    Copyright (C) 2018-2026 Romain Vimont
-
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
-
-        http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+本项目是 scrcpy 5.0.1 的独立衍生作品，作者为 Keye3Tuido。scrcpy 原作者、历史、Apache-2.0 许可证及修改声明随仓库保留。自有新增代码采用 Apache-2.0，第三方组件保留各自许可。应用图标沿用 scrcpy 原始图标。完整归属与对应源码要求见 [THIRD_PARTY.md](THIRD_PARTY.md)。

@@ -1,14 +1,24 @@
+/* Device Mirror modification, Copyright 2026 Keye3Tuido:
+ * white gesture margins and device-edge coordinate clamping.
+ * Original scrcpy licensing and authorship are retained.
+ */
 #include "screen.h"
 
 #include <assert.h>
 #include <string.h>
+#include <stdlib.h>
 #include <SDL3/SDL.h>
 
 #include "events.h"
+#include "device_mirror_geometry.h"
 #include "icon.h"
 #include "options.h"
 #include "util/log.h"
 #include "util/sdl.h"
+
+#ifdef __APPLE__
+#include "sys/macos/device_toolbar.h"
+#endif
 
 #define DISPLAY_MARGINS 96
 
@@ -247,9 +257,15 @@ compute_content_rect(struct sc_size window_size, struct sc_size content_size,
 static void
 sc_screen_update_content_rect(struct sc_screen *screen) {
     struct sc_size window_size = sc_sdl_get_window_size(screen->window);
+    unsigned margin = screen->device_mirror_margin
+                    ? sc_device_mirror_margin(window_size.width, window_size.height) : 0;
+    window_size.width -= 2 * margin;
+    window_size.height -= 2 * margin;
     compute_content_rect(window_size, screen->content_size,
                          screen->is_icon_active, screen->render_fit,
                          &screen->rect);
+    screen->rect.x += margin;
+    screen->rect.y += margin;
 }
 
 // render the texture to the renderer
@@ -518,6 +534,7 @@ bool
 sc_screen_init(struct sc_screen *screen,
                const struct sc_screen_params *params) {
     screen->controller = params->controller;
+    screen->device_mirror_margin = getenv("DEVICE_MIRROR_TOOLBAR") != NULL;
 
     screen->resize_pending = false;
     screen->window_shown = false;
@@ -536,6 +553,9 @@ sc_screen_init(struct sc_screen *screen,
     screen->bg.r = (params->background_color >> 16) & 0xFF;
     screen->bg.g = (params->background_color >> 8) & 0xFF;
     screen->bg.b = params->background_color & 0xFF;
+    if (screen->device_mirror_margin) {
+        screen->bg.r = screen->bg.g = screen->bg.b = 255;
+    }
 
     screen->req.x = params->window_x;
     screen->req.y = params->window_y;
@@ -707,6 +727,12 @@ sc_screen_init(struct sc_screen *screen,
 
     sc_input_manager_init(&screen->im, &im_params);
 
+#ifdef __APPLE__
+    // Device Mirror: controls and text input target this screen's controller.
+    screen->device_toolbar = params->camera ? NULL
+        : sc_device_toolbar_create(screen->window, params->controller);
+#endif
+
     // Initialize even if not used for simplicity
     sc_mouse_capture_init(&screen->mc, screen->window, params->shortcut_mods);
 
@@ -838,6 +864,9 @@ sc_screen_join(struct sc_screen *screen) {
 
 void
 sc_screen_destroy(struct sc_screen *screen) {
+#ifdef __APPLE__
+    sc_device_toolbar_destroy(screen->device_toolbar);
+#endif
 #ifndef NDEBUG
     assert(!screen->open);
 #endif
@@ -1170,6 +1199,15 @@ sc_disconnect_on_timeout(struct sc_disconnect *d, void *userdata) {
 
 void
 sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
+#ifdef __APPLE__
+    // SDL observes Cocoa key events before native text fields handle them.
+    // Do not send drafts to Android while the user edits the local input bar.
+    if ((event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP
+            || event->type == SDL_EVENT_TEXT_INPUT || event->type == SDL_EVENT_TEXT_EDITING)
+            && sc_device_toolbar_is_editing(screen->device_toolbar)) {
+        return;
+    }
+#endif
     switch (event->type) {
         case SC_EVENT_OPEN_WINDOW: {
             struct sc_size *size = event->user.data1;
@@ -1362,5 +1400,6 @@ sc_screen_convert_window_to_frame_coords(struct sc_screen *screen,
             break;
     }
 
-    return result;
+    return screen->device_mirror_margin
+         ? sc_device_mirror_clamp(result, screen->frame_size) : result;
 }

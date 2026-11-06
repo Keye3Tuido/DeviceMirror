@@ -1,3 +1,7 @@
+/* Device Mirror modification, Copyright 2026 Keye3Tuido:
+ * defer margin presses until the drag enters the device image.
+ * Original scrcpy licensing and authorship are retained.
+ */
 #include "input_manager.h"
 
 #include <assert.h>
@@ -41,6 +45,7 @@ sc_input_manager_init(struct sc_input_manager *im,
     im->vfinger_invert_y = false;
 
     im->mouse_buttons_state = 0;
+    im->edge_pending = false;
 
     im->last_keycode = SDLK_UNKNOWN;
     im->last_mod = 0;
@@ -755,6 +760,17 @@ sc_input_manager_process_mouse_motion(struct sc_input_manager *im,
         return;
     }
 
+    if (im->edge_pending) {
+        SDL_FRect *r = &im->screen->rect;
+        if (event->x < r->x || event->x >= r->x + r->w
+                || event->y < r->y || event->y >= r->y + r->h) {
+            return;
+        }
+        // Start at the nearest device edge once the drag enters the image.
+        im->mp->ops->process_mouse_click(im->mp, &im->edge_pending_event);
+        im->edge_pending = false;
+    }
+
     struct sc_mouse_motion_event evt = {
         .position = sc_input_manager_get_position(im, event->x, event->y),
         .pointer_id = im->vfinger_down ? SC_POINTER_ID_GENERIC_FINGER
@@ -912,7 +928,8 @@ sc_input_manager_process_mouse_button(struct sc_input_manager *im,
     // double-click on black borders resizes to fit the device screen
     bool video = im->screen->video;
     bool mouse_relative_mode = im->mp && im->mp->relative_mode;
-    if (video && !mouse_relative_mode && event->button == SDL_BUTTON_LEFT
+    if (video && !im->screen->device_mirror_margin && !mouse_relative_mode
+            && event->button == SDL_BUTTON_LEFT
             && event->clicks == 2) {
         int32_t x = event->x;
         int32_t y = event->y;
@@ -928,6 +945,11 @@ sc_input_manager_process_mouse_button(struct sc_input_manager *im,
     }
 
     if (!im->mp || paused) {
+        return;
+    }
+
+    if (!down && event->button == SDL_BUTTON_LEFT && im->edge_pending) {
+        im->edge_pending = false;
         return;
     }
 
@@ -949,6 +971,19 @@ sc_input_manager_process_mouse_button(struct sc_input_manager *im,
                                  : SC_POINTER_ID_MOUSE,
         .buttons_state = im->mouse_buttons_state,
     };
+
+    if (down && event->button == SDL_BUTTON_LEFT
+            && im->screen->device_mirror_margin && !mouse_relative_mode
+            && !ctrl_pressed && !shift_pressed) {
+        SDL_FRect *r = &im->screen->rect;
+        if (event->x < r->x || event->x >= r->x + r->w
+                || event->y < r->y || event->y >= r->y + r->h) {
+            // A click confined to the margin must not tap the device edge.
+            im->edge_pending_event = evt;
+            im->edge_pending = true;
+            return;
+        }
+    }
 
     assert(im->mp->ops->process_mouse_click);
     im->mp->ops->process_mouse_click(im->mp, &evt);

@@ -1,235 +1,63 @@
-# Frequently Asked Questions
+# Device Mirror 常见问题
 
-[Read in another language](#translations)
+## 一个 app 能否独立运行
 
-Here are the common reported problems and their status.
+`Device Mirror.app` 内含 adb、scrcpy、动态库及原生控制服务，可移动到“应用程序”等本地目录。日常运行不依赖项目源码或 Python。
 
-If you encounter any error, the first step is to upgrade to the latest version.
+iOS USB 操控和模拟器仍需要本机完整 Xcode：XCTest 负责启动设备控制组件，真机签名由 Xcode 完成。Android 和 iOS USB 观看镜像使用应用内组件及 macOS 系统功能。
 
+## Android 没有出现在设备列表中
 
-## `adb` and USB issues
+1. 使用支持数据传输的 USB 线，开启设备开发者选项中的 USB 调试。
+2. 解锁设备并接受 USB 调试授权，再点“刷新”。
+3. 若提示应用内 adb 缺失，重新取得完整的 `Device Mirror.app`。
 
-`scrcpy` execute `adb` commands to initialize the connection with the device. If
-`adb` fails, then scrcpy will not work.
+“未授权”表示设备等待 USB 调试授权；“离线”时重新连接后刷新。部分设备另有“USB 调试（安全设置）”，需要启用后才能注入输入。
 
-This is typically not a bug in _scrcpy_, but a problem in your environment.
+## Android 怎样输入中文或发送回车
 
+先点击设备输入框，再在窗口文字栏输入并发送。文字通过设备剪贴板粘贴；“按键”菜单提供回车、退格、Delete、Tab、Escape 和方向键。发送文字与按回车是两个动作，安全输入框或禁止粘贴的应用可能拒绝文字。
 
-### `adb` not found
+## 怎样录制 Android 日志
 
-You need `adb` accessible from your `PATH`.
+在设备列表选中正在投屏的设备，点“记录系统日志”，完成后点“停止记录”；也可在启动前勾选“投屏时记录系统日志（logcat）”。“此设备日志”打开该实例目录，包含 `mirror.log` 及各次 logcat 文件。关闭投屏会停止对应录制；日志持续写入本机磁盘。
 
-On Windows, the current directory is in your `PATH`, and `adb.exe` is included
-in the release, so it should work out-of-the-box.
+## iPhone / iPad 观看镜像需要 Apple 账号吗
 
+USB 观看镜像使用 macOS 采集功能。连接并解锁设备，完成“信任此电脑”，再允许 Device Mirror 的采集权限即可；权限入口位于系统设置 → 隐私与安全性 → 相机。
 
-### Device not detected
+## iPhone / iPad 怎样通过 USB 操控
 
->     ERROR: Could not find any ADB device
+在 Xcode → Settings → Apple Accounts 登录自己的账号，在 Device Mirror 的“USB 操控：配置 Apple 账号”中点“重新检测”。单个团队自动使用，多个团队时选择一个。按设备提示开启开发者模式、信任电脑和开发者应用，再连接“USB 操控”。系统测试认证由设备上的 Touch ID、Face ID 或密码完成。
 
-Check that you correctly enabled [adb debugging][enable-adb].
+签名到期需联网续签。连接失败时可通过该窗口的“日志”查看构建或测试错误。若停在“启用 UI 自动化”并超时，解锁设备、完成测试认证后重试。
 
-Your device must be detected by `adb`:
+## 点击“验证 App”后没有结果
 
-```
-adb devices
-```
+确认设备日期和时间正确，再检查网络，重试设置 → 通用 → VPN 与设备管理中的开发者应用验证。Xcode 登录与设备验证是两个步骤。仍失败时保留日志，检查证书、签名和设备端错误。
 
-If your device is not detected, you may need some [drivers] (on Windows). There is a separate [USB driver for Google devices][google-usb-driver].
+## iOS 返回、主页和多任务分别做什么
 
-[enable-adb]: https://developer.android.com/studio/command-line/adb.html#Enabling
-[drivers]: https://developer.android.com/studio/run/oem-usb.html
-[google-usb-driver]: https://developer.android.com/studio/run/win-usb
+“返回”优先点击当前应用的标准导航栏返回按钮，兼容 iPadOS 的 `BackButton` 标识；其次寻找工具栏或自定义页面中明确标注“返回／Back／上一页”等名称的按钮，英文名称匹配忽略大小写。只有一个可用候选时才点击；有多个候选时提示直接选择。无返回控件时尝试收起屏幕键盘。iOS 没有 Android 式的全局返回键，未标注的自定义控件需要直接点击；页面根层级可能没有可执行的返回操作。
 
+“主页”激活系统桌面 SpringBoard。“多任务”发送专用系统按键事件，打开应用切换界面。控制操作执行期间按键暂时禁用；完成后再进行下一步。系统弹窗、锁屏或测试认证可能阻止操作，应先处理设备上的提示。
 
-### Device unauthorized
+## 为什么 iOS 比 Android 慢
 
->     ERROR: Device is unauthorized:
->     ERROR:     -->   (usb)  0123456789abcdef          unauthorized
->     ERROR: A popup should open on the device to request authorization.
+iOS 操控通过 XCTest / WebDriverAgent 执行，包含系统自动化开销。程序使用单次原生点击事件，画面只保留最新待显示帧，且同一实例只执行一个操作，避免连续输入排队。控制日志记录具体导航动作、请求耗时及设备返回的错误原因；耗时不包含画面回传。
 
-When connecting, a popup should open on the device. You must authorize USB
-debugging.
+## 怎样从屏幕外划入
 
-If it does not open, check [stackoverflow][device-unauthorized].
+Android 可在画面周围的白色留白中按住鼠标，向内拖入。系统主页及返回手势需要设备启用相应手势导航。只在留白内单击不会触碰设备。
 
-[device-unauthorized]: https://stackoverflow.com/questions/23081263/adb-android-device-unauthorized
+iOS 支持从画面内开始的普通滑动和长按：按住鼠标拖动或停留，松开后设备按轨迹和停顿时间重放，单次最长 30 秒。拖动途中离开画面时，坐标限制在画面边界。窗口失焦、按 Esc 或操作中旋转／调整画面尺寸会取消尚未提交的操作。从留白开始的拖动和滚轮不发送触摸，也不额外识别边缘主页或返回手势。
 
+## 怎样管理多个实例
 
-### Several devices connected
+每台设备有独立窗口和控制目标。⌘1 返回设备列表，选择另一台设备连接；关闭一个窗口只停止该实例。Android 的画质、帧率、音频和日志设置按设备管理。⌘Q 结束全部受管会话。
 
-If several devices are connected, you will encounter this error:
+## 能否只通过 GitHub Pages 使用
 
->     ERROR: Multiple (2) ADB devices:
->     ERROR:     -->   (usb)  0123456789abcdef                device  Nexus_5
->     ERROR:     --> (tcpip)  192.168.1.5:5555                device  GM1913
->     ERROR: Select a device via -s (--serial), -d (--select-usb) or -e (--select-tcpip)
+完整功能需要本机执行设备控制服务。GitHub Pages 可托管介绍和下载页面，静态网页本身无法执行本项目的 adb、XCTest 和 USB 服务。
 
-In that case, you can either provide the identifier of the device you want to
-mirror:
-
-```bash
-scrcpy -s 0123456789abcdef
-```
-
-Or request the single USB (or TCP/IP) device:
-
-```bash
-scrcpy -d  # USB device
-scrcpy -e  # TCP/IP device
-```
-
-Note that if your device is connected over TCP/IP, you might get this message:
-
->     adb: error: more than one device/emulator
->     ERROR: "adb reverse" returned with value 1
->     WARN: 'adb reverse' failed, fallback to 'adb forward'
-
-This is expected (due to a bug on old Android versions, see [#5]), but in that
-case, scrcpy fallbacks to a different method, which should work.
-
-[#5]: https://github.com/Genymobile/scrcpy/issues/5
-
-
-### Conflicts between adb versions
-
->     adb server version (41) doesn't match this client (39); killing...
-
-This error occurs when you use several `adb` versions simultaneously. You must
-find the program using a different `adb` version, and use the same `adb` version
-everywhere.
-
-You could overwrite the `adb` binary in the other program, or ask _scrcpy_ to
-use a specific `adb` binary, by setting the `ADB` environment variable:
-
-```bash
-# in bash
-export ADB=/path/to/your/adb
-scrcpy
-```
-
-```cmd
-:: in cmd
-set ADB=C:\path\to\your\adb.exe
-scrcpy
-```
-
-```powershell
-# in PowerShell
-$env:ADB = 'C:\path\to\your\adb.exe'
-scrcpy
-```
-
-
-### Device disconnected
-
-If _scrcpy_ stops itself with the warning "Device disconnected", then the
-`adb` connection has been closed.
-
-Try with another USB cable or plug it into another USB port. See [#281] and
-[#283].
-
-[#281]: https://github.com/Genymobile/scrcpy/issues/281
-[#283]: https://github.com/Genymobile/scrcpy/issues/283
-
-
-## OTG issues on Windows
-
-On Windows, if `scrcpy --otg` (or `--keyboard=aoa`/`--mouse=aoa`) results in:
-
->     ERROR: Could not find any USB device
-
-(or if only unrelated USB devices are detected), there might be drivers issues.
-
-Please read [#3654], in particular [this comment][#3654-comment1], [the next
-one][#3654-comment2] and [this one][#3654-comment3].
-
-[#3654]: https://github.com/Genymobile/scrcpy/issues/3654
-[#3654-comment1]: https://github.com/Genymobile/scrcpy/issues/3654#issuecomment-1369278232
-[#3654-comment2]: https://github.com/Genymobile/scrcpy/issues/3654#issuecomment-1369295011
-[#3654-comment3]: https://github.com/Genymobile/scrcpy/issues/3654#issuecomment-2613219725
-
-
-## Control issues
-
-### Mouse and keyboard do not work
-
-On some devices, you may need to enable an option to allow [simulating input].
-In developer options, enable:
-
-> **USB debugging (Security settings)**  
-> _Allow granting permissions and simulating input via USB debugging_
-
-Rebooting the device is necessary once this option is set.
-
-[simulating input]: https://github.com/Genymobile/scrcpy/issues/70#issuecomment-373286323
-
-
-### Special characters do not work
-
-The default text injection method is limited to ASCII characters. A trick allows
-to also inject some [accented characters][accented-characters],
-but that's all. See [#37].
-
-To avoid the problem, [change the keyboard mode to simulate a physical
-keyboard][hid].
-
-[accented-characters]: https://blog.rom1v.com/2018/03/introducing-scrcpy/#handle-accented-characters
-[#37]: https://github.com/Genymobile/scrcpy/issues/37
-[hid]: doc/keyboard.md#physical-keyboard-simulation
-
-
-## Client issues
-
-### Issue with Wayland
-
-By default, SDL uses x11 on Linux. The [video driver] can be changed via the
-`SDL_VIDEODRIVER` environment variable:
-
-[video driver]: https://wiki.libsdl.org/FAQUsingSDL#how_do_i_choose_a_specific_video_driver
-
-```bash
-export SDL_VIDEODRIVER=wayland
-scrcpy
-```
-
-On some distributions (at least Fedora), the package `libdecor` must be
-installed manually.
-
-See issues [#2554] and [#2559].
-
-[#2554]: https://github.com/Genymobile/scrcpy/issues/2554
-[#2559]: https://github.com/Genymobile/scrcpy/issues/2559
-
-
-### KWin compositor crashes
-
-On Plasma Desktop, compositor is disabled while _scrcpy_ is running.
-
-As a workaround, [disable "Block compositing"][kwin].
-
-[kwin]: https://github.com/Genymobile/scrcpy/issues/114#issuecomment-378778613
-
-
-## Crashes
-
-### Exception
-
-If you get any exception related to `MediaCodec`:
-
-```
-ERROR: Exception on thread Thread[main,5,main]
-java.lang.IllegalStateException
-        at android.media.MediaCodec.native_dequeueOutputBuffer(Native Method)
-```
-
-then try with another [encoder](doc/video.md#encoder).
-
-
-## Translations
-
-Translations of this FAQ in other languages are available in the [wiki].
-
-[wiki]: https://github.com/Genymobile/scrcpy/wiki
-
-Only this FAQ file is guaranteed to be up-to-date.
+Android 命令行参数问题见 [scrcpy 上游 FAQ](https://github.com/Genymobile/scrcpy/blob/master/FAQ.md)。

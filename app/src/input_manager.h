@@ -1,3 +1,6 @@
+/* Device Mirror modification, Copyright 2026 Keye3Tuido:
+ * pending screen-edge gestures; original scrcpy licensing retained.
+ */
 #ifndef SC_INPUTMANAGER_H
 #define SC_INPUTMANAGER_H
 
@@ -37,6 +40,9 @@ struct sc_input_manager {
     bool vfinger_invert_y;
 
     uint8_t mouse_buttons_state; // OR of enum sc_mouse_button values
+
+    bool edge_pending;
+    struct sc_mouse_click_event edge_pending_event;
 
     // Tracks the number of identical consecutive shortcut key down events.
     // Not to be confused with event->repeat, which counts the number of

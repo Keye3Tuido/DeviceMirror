@@ -1,0 +1,34 @@
+Device Mirror
+Copyright 2026 Keye3Tuido <soarcx@foxmail.com>
+
+This is an independent derivative of scrcpy 5.0.1, not an official Genymobile release.
+scrcpy: Copyright (C) 2018-present Genymobile and its contributors.
+The upstream Apache License 2.0 and source copyright notices are retained.
+Original upstream: https://github.com/Genymobile/scrcpy
+Base commit: a60891aea193d92e7e5c3942700eca63f9d19a5f
+
+Changes: native macOS launcher, independent device sessions, Android virtual
+hardware keys, text input, edge margins and per-device logcat recording;
+account-free AVFoundation USB viewing; native USB forwarding and signing service;
+WebDriverAgent-based iOS device/simulator clicks, touch trajectories, holds,
+text and navigation buttons.
+The packaged WDA source imports the Apache-2.0 Device Mirror DMControlCommands extension
+from FBTouchActionCommands.m; upstream BSD headers and license are retained.
+The fixed upstream submodule is unchanged.
+Project documentation and native UI guidance are maintained for Device Mirror.
+Upstream command-line documentation and release scripts are omitted from this
+macOS app distribution; the original source history remains available in Git.
+Modified upstream files carry Device Mirror comments; new files carry SPDX notices.
+
+WebDriverAgent: Copyright (c) 2015-present, Facebook, Inc. All rights reserved.
+Its full BSD license is retained in third_party/WebDriverAgent/LICENSE and the app.
+The bundled icon is the original scrcpy icon, not an original Device Mirror logo.
+Android adb is built from nmeum/android-tools 37.0.0p1 and its vendored
+AOSP/BoringSSL/fmt sources. The header search order is adjusted for macOS;
+mDNS is disabled. LGPL libusb 1.0.30 is built as a replaceable shared library.
+Complete source archives, build script, dependency notices and version records
+are bundled in ThirdParty/Android-tools/.
+No endorsement by Genymobile, Meta/Facebook, Appium, Google, or Apple is implied.
+
+See THIRD_PARTY.md and the packaged ThirdParty directory for dependency notices,
+FFmpeg corresponding source, and build/relink instructions.

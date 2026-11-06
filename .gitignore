@@ -8,3 +8,11 @@ build/
 /x/
 local.properties
 /scrcpy-server
+
+# Device Mirror local build outputs and downloaded dependency archives
+/macos-launcher/.build/
+/Device Mirror.app/
+/macos-launcher/dist/
+/macos-launcher/vendor/
+**/__pycache__/
+.DS_Store

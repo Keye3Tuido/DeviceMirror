@@ -1,3 +1,6 @@
+/* Device Mirror modification, Copyright 2026 Keye3Tuido:
+ * per-window gesture margin state; original scrcpy licensing retained.
+ */
 #ifndef SC_SCREEN_H
 #define SC_SCREEN_H
 
@@ -69,6 +72,10 @@ struct sc_screen {
     } req;
 
     SDL_Window *window;
+#ifdef __APPLE__
+    // Device Mirror addition, owned by this screen instance.
+    void *device_toolbar;
+#endif
     SDL_Renderer *renderer;
 #ifdef SC_DISPLAY_FORCE_OPENGL_CORE_PROFILE
     SDL_GLContext gl_context;
@@ -88,6 +95,7 @@ struct sc_screen {
     enum sc_orientation orientation;
     // rectangle of the content (excluding black borders)
     struct SDL_FRect rect;
+    bool device_mirror_margin;
     bool window_shown;
 
     // only accessed from the thread calling sc_frame_sink_ops functions

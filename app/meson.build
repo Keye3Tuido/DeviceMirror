@@ -99,6 +99,10 @@ else
     ]
     if host_machine.system() == 'darwin'
         feature_test_macros += '-D_DARWIN_C_SOURCE'
+        # Device Mirror: native per-instance virtual key toolbar.
+        add_languages('objc')
+        add_project_arguments('-fobjc-arc', language: 'objc')
+        src += ['src/sys/macos/device_toolbar.m']
     endif
 endif
 
@@ -149,6 +153,10 @@ dependencies = [
     dependency('libswresample', static: static),
     dependency('sdl3', version: '>= 3.2.0', static: static),
 ]
+
+if host_machine.system() == 'darwin'
+    dependencies += dependency('appleframeworks', modules: ['AppKit'])
+endif
 
 if v4l2_support
     dependencies += dependency('libavdevice', static: static)
