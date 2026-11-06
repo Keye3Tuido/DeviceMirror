@@ -163,6 +163,30 @@ int main(void) {
         assert(commands == 2 && last_controller == &controllers[1]);
         keyEvents = [NSMutableArray new];
         commands = 0;
+        // AppKit forwards overflow menu selections with NSMenuItem as sender.
+        // Exercise its real dispatch, including keys hidden by a narrow window.
+        for (int i = 0; i < 2; ++i) {
+            SDL_SetWindowSize(windows[i], 350, 600);
+            SDL_PumpEvents();
+            for (NSToolbarItem *item in owners[i].toolbar.items) {
+                if (item.tag <= 0) { continue; }
+                NSMenuItem *menu = item.menuFormRepresentation;
+                assert(menu);
+                assert([NSApp sendAction:menu.action to:menu.target from:menu]);
+                assert(keyEvents.count == 2);
+                assert([keyEvents[0][@"code"] integerValue] == item.tag);
+                assert([keyEvents[0][@"action"] intValue] == AKEY_EVENT_ACTION_DOWN);
+                assert([keyEvents[1][@"code"] integerValue] == item.tag);
+                assert([keyEvents[1][@"action"] intValue] == AKEY_EVENT_ACTION_UP);
+                assert(last_controller == &controllers[i]);
+                [keyEvents removeAllObjects]; commands = 0;
+                [(NSButton *)item.view performClick:nil];
+                assert(keyEvents.count == 2);
+                assert([keyEvents[0][@"code"] integerValue] == item.tag);
+                [keyEvents removeAllObjects]; commands = 0;
+            }
+            assert(!owners[i].window.visible);
+        }
         for (int i = 0; i < 2; ++i) {
             NSToolbarItem *rotate = [owners[i] toolbar:owners[i].toolbar
                 itemForItemIdentifier:@"rotate" willBeInsertedIntoToolbar:YES];

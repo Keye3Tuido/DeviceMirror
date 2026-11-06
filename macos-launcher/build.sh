@@ -66,8 +66,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.keye3tuido.devicemirror</string>
 <key>CFBundleExecutable</key><string>DeviceMirror</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.6.2</string>
-<key>CFBundleVersion</key><string>20</string>
+<key>CFBundleShortVersionString</key><string>0.6.3</string>
+<key>CFBundleVersion</key><string>21</string>
 <key>CFBundleIconFile</key><string>AppIcon.png</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>

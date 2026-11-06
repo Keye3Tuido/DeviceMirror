@@ -211,6 +211,12 @@ static void DMInstallEventRouting(DMDeviceToolbar *owner) {
         button.repeatPress = ^{ [owner repeatKey]; };
         button.releasePress = ^{ [owner releaseKey]; };
         item.view = button;
+        // Overflow selections send NSMenuItem, not the custom long-press view.
+        NSMenuItem *menu = [[NSMenuItem alloc] initWithTitle:spec[0]
+            action:@selector(press:) keyEquivalent:@""];
+        menu.target = self;
+        menu.tag = code;
+        item.menuFormRepresentation = menu;
     }
     if ([identifier isEqualToString:@"send-text"]) {
         item.action = @selector(showTextInput:);
