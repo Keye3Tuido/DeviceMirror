@@ -3,6 +3,9 @@
 #include <assert.h>
 
 #include "util/log.h"
+#ifdef __APPLE__
+#include "sys/macos/device_toolbar.h"
+#endif
 
 // Drop droppable events above this limit
 #define SC_CONTROL_MSG_QUEUE_LIMIT 60
@@ -142,6 +145,13 @@ sc_controller_resize_display(struct sc_controller *controller,
 static bool
 process_msg(struct sc_controller *controller,
             const struct sc_control_msg *msg, bool *eos) {
+#ifdef __APPLE__
+    if (msg->type == SC_CONTROL_MSG_TYPE_DM_DIRECT_TEXT) {
+        // Share the device command queue so later keys/taps cannot overtake text.
+        sc_device_toolbar_process_text(msg->dm_direct_text.owner, msg->dm_direct_text.text);
+        return true;
+    }
+#endif
     static uint8_t serialized_msg[SC_CONTROL_MSG_MAX_SIZE];
     size_t length = sc_control_msg_serialize(msg, serialized_msg);
     if (!length) {

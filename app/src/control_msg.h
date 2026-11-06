@@ -50,6 +50,8 @@ enum sc_control_msg_type {
     SC_CONTROL_MSG_TYPE_CAMERA_ZOOM_OUT,
     SC_CONTROL_MSG_TYPE_RESIZE_DISPLAY,
     SC_CONTROL_MSG_TYPE_SCAN_FILE,
+    // Host-only work, consumed by controller.c; never sent to scrcpy-server.
+    SC_CONTROL_MSG_TYPE_DM_DIRECT_TEXT = 0x100,
 };
 
 enum sc_copy_key {
@@ -70,6 +72,11 @@ struct sc_control_msg {
         struct {
             char *text; // owned, to be freed by free()
         } inject_text;
+        struct {
+            char *text;
+            void *owner; // retained native toolbar; released on the UI thread
+            void (*destroy_owner)(void *);
+        } dm_direct_text;
         struct {
             enum android_motionevent_action action;
             enum android_motionevent_buttons action_button;

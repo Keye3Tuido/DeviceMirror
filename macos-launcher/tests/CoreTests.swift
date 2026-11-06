@@ -23,6 +23,7 @@ struct CoreTests {
         precondition(AndroidDevice.parse("adb: error: device not found\n").isEmpty)
         let unusual = AndroidDevice(serial: "serial with spaces;$(exit)", state: "device", model: "test")
         let args = MirrorOptions().arguments(for: unusual)
+        precondition(args.contains("--prefer-text") && args.contains("--no-clipboard-autosync") && args.contains("--legacy-paste"))
         precondition(args[1] == unusual.serial) // one argv element, never a shell command
         precondition(args.contains("--no-audio") && args.contains("--stay-awake"))
         var options = MirrorOptions()

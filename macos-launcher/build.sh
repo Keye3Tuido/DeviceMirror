@@ -23,6 +23,8 @@ mkdir -p "$app/Contents/MacOS" "$resources/scrcpy" "$resources/ThirdParty/Source
 tar -xzf vendor/scrcpy-macos-aarch64-v5.0.1.tar.gz --strip-components=1 -C .build/prebuilt
 cp .build/prebuilt/scrcpy-server "$resources/scrcpy/"
 python3 prepare-adb.py "$app"
+python3 build-android-input.py "$resources/AndroidInput/device-mirror-input.apk"
+xcrun swiftc -O -swift-version 5 Sources/AndroidCore.swift AndroidInputService/main.swift -o "$helpers/android-input"
 cp .build/prebuilt/scrcpy.png .build/prebuilt/disconnected.png "$resources/scrcpy/"
 cp .build/scrcpy/app/scrcpy "$helpers/"
 chmod u+w "$frameworks/"*.dylib 2>/dev/null || true
@@ -53,8 +55,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.keye3tuido.devicemirror</string>
 <key>CFBundleExecutable</key><string>DeviceMirror</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.5.3</string>
-<key>CFBundleVersion</key><string>13</string>
+<key>CFBundleShortVersionString</key><string>0.5.4</string>
+<key>CFBundleVersion</key><string>14</string>
 <key>CFBundleIconFile</key><string>AppIcon.png</string>
 <key>LSMinimumSystemVersion</key><string>26.0</string>
 <key>NSHighResolutionCapable</key><true/>

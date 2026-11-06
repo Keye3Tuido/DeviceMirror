@@ -14,6 +14,8 @@
 | SDL | 3.4.16，Homebrew 官方 sdl3 配方 | zlib，保留完整 LICENSE；动态链接 |
 | 系统框架与 zlib | macOS 提供 | 使用本机安装版本，分发包不复制 Apple 系统框架或开发工具 |
 
+自有 Android 文本输入组件及其 Mac 辅助服务采用 Apache-2.0，源码分别位于 `macos-launcher/AndroidInput/` 与 `macos-launcher/AndroidInputService/`。Android SDK 和 Java 仅用于编译，不随 Mac 应用分发。APK 由本机构建密钥签名，密钥不随应用或仓库分发。
+
 WDA 通过 XCTest 使用本机 Xcode 提供的开发接口，USB 采集使用系统 AVFoundation / CoreMediaIO。开发证书、描述文件和 iOS 签名应用由用户本机 Xcode 生成并存于本地缓存；它们不随通用分发包提供。
 
 ## LGPL 对应源码与替换

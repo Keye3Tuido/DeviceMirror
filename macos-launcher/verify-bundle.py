@@ -16,6 +16,8 @@ subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)]
 info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
 assert info['CFBundleExecutable'] == 'DeviceMirror'
 assert 'NSBluetoothAlwaysUsageDescription' not in info
+assert (app / 'Contents/Resources/AndroidInput/device-mirror-input.apk').is_file()
+assert (app / 'Contents/Helpers/android-input').is_file()
 assert not list(app.rglob('*.app')), 'Unexpected nested app entry'
 assert not list(app.rglob('ios_bridge.py')) and not list(app.rglob('idevice_tools'))
 binaries = [app / 'Contents/MacOS/DeviceMirror', *list((app / 'Contents/Helpers').iterdir()), *list((app / 'Contents/Frameworks').glob('*.dylib'))]

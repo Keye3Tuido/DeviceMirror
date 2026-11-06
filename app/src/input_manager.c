@@ -3,6 +3,9 @@
  * Original scrcpy licensing and authorship are retained.
  */
 #include "input_manager.h"
+#ifdef __APPLE__
+#include "sys/macos/device_toolbar.h"
+#endif
 
 #include <assert.h>
 #include <stdlib.h>
@@ -255,6 +258,15 @@ clipboard_paste(struct sc_input_manager *im) {
         SDL_free(text);
         return;
     }
+
+#ifdef __APPLE__
+    if (getenv("DEVICE_MIRROR_TOOLBAR")) {
+        bool ok = sc_device_toolbar_send_text(im->controller, text);
+        SDL_free(text);
+        if (!ok) { LOGW("Device Mirror: paste text queue rejected"); }
+        return;
+    }
+#endif
 
     char *text_dup = strdup(text);
     SDL_free(text);

@@ -8,7 +8,8 @@ Original upstream: https://github.com/Genymobile/scrcpy
 Base commit: a60891aea193d92e7e5c3942700eca63f9d19a5f
 
 Changes: native macOS launcher, independent device sessions, Android virtual
-hardware keys, text input, edge margins and per-device logcat recording;
+hardware keys, direct Unicode input via a self-authored Android IME,
+edge margins and per-device logcat recording;
 account-free AVFoundation USB viewing; native USB forwarding and signing service;
 WebDriverAgent-based iOS device/simulator clicks, touch trajectories, holds,
 text and navigation buttons.

@@ -16,4 +16,15 @@ xcrun clang -fobjc-arc -I../app/src -I.build/scrcpy/app -I.build/ffmpeg-install/
     -I/opt/homebrew/include tests/AndroidToolbarTests.m -framework AppKit \
     -L/opt/homebrew/lib -lSDL3 -o .build/toolbar-tests
 .build/toolbar-tests
+xcrun cc -I../app/src -I.build/scrcpy/app -I/opt/homebrew/include \
+    tests/AndroidInputQueueTests.c ../app/src/controller.c ../app/src/control_msg.c \
+    ../app/src/util/thread.c ../app/src/util/str.c ../app/src/util/strbuf.c \
+    ../app/src/util/memory.c ../app/src/util/tick.c ../app/src/compat.c \
+    -L/opt/homebrew/lib -lSDL3 -o .build/input-queue-tests
+.build/input-queue-tests
+xcrun cc -DSC_TEST -I../app/src -I.build/scrcpy/app -I/opt/homebrew/include \
+    ../app/tests/test_control_msg_serialize.c ../app/src/control_msg.c ../app/src/util/str.c \
+    ../app/src/util/strbuf.c ../app/src/compat.c -L/opt/homebrew/lib -lSDL3 -o .build/control-msg-tests
+.build/control-msg-tests
+xcrun swiftc -swift-version 5 Sources/AndroidCore.swift AndroidInputService/main.swift -o .build/android-input-tests-service
 /usr/bin/python3 -m unittest discover -s tests -p 'test_*.py' -v

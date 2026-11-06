@@ -102,6 +102,7 @@ write_string_tiny(uint8_t *buf, const char *utf8, size_t max_len) {
 
 size_t
 sc_control_msg_serialize(const struct sc_control_msg *msg, uint8_t *buf) {
+    if (msg->type == SC_CONTROL_MSG_TYPE_DM_DIRECT_TEXT) { return 0; }
     buf[0] = msg->type;
     switch (msg->type) {
         case SC_CONTROL_MSG_TYPE_INJECT_KEYCODE:
@@ -214,6 +215,9 @@ void
 sc_control_msg_log(const struct sc_control_msg *msg) {
 #define LOG_CMSG(fmt, ...) LOGV("input: " fmt, ## __VA_ARGS__)
     switch (msg->type) {
+        case SC_CONTROL_MSG_TYPE_DM_DIRECT_TEXT:
+            LOG_CMSG("direct text commit (content omitted)");
+            break;
         case SC_CONTROL_MSG_TYPE_INJECT_KEYCODE:
             LOG_CMSG("key %-4s code=%d repeat=%" PRIu32 " meta=%06lx",
                      KEYEVENT_ACTION_LABEL(msg->inject_keycode.action),
@@ -361,13 +365,26 @@ sc_control_msg_is_droppable(const struct sc_control_msg *msg) {
     // UHID_INPUT messages for this device to be invalid.
     // Cannot drop UHID_DESTROY messages either, because a further UHID_CREATE
     // with the same id may fail.
-    return msg->type != SC_CONTROL_MSG_TYPE_UHID_CREATE
+    // Direct Unicode submission may wait for the device IME. Preserve text,
+    // key releases and gesture boundaries while motion events may be dropped.
+    return msg->type != SC_CONTROL_MSG_TYPE_DM_DIRECT_TEXT
+        && msg->type != SC_CONTROL_MSG_TYPE_INJECT_TEXT
+        && msg->type != SC_CONTROL_MSG_TYPE_INJECT_KEYCODE
+        && !(msg->type == SC_CONTROL_MSG_TYPE_INJECT_TOUCH_EVENT
+            && msg->inject_touch_event.action != AMOTION_EVENT_ACTION_MOVE)
+        && msg->type != SC_CONTROL_MSG_TYPE_UHID_CREATE
         && msg->type != SC_CONTROL_MSG_TYPE_UHID_DESTROY;
 }
 
 void
 sc_control_msg_destroy(struct sc_control_msg *msg) {
     switch (msg->type) {
+        case SC_CONTROL_MSG_TYPE_DM_DIRECT_TEXT:
+            free(msg->dm_direct_text.text);
+            if (msg->dm_direct_text.destroy_owner) {
+                msg->dm_direct_text.destroy_owner(msg->dm_direct_text.owner);
+            }
+            break;
         case SC_CONTROL_MSG_TYPE_INJECT_TEXT:
             free(msg->inject_text.text);
             break;

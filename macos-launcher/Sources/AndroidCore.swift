@@ -41,7 +41,7 @@ struct MirrorOptions {
     func arguments(for device: AndroidDevice) -> [String] {
         var args = ["--serial", device.serial, "--window-title", "Device Mirror · \(device.model) · \(device.serial.suffix(6))",
                     "--max-fps", String(fps), "--video-bit-rate", "8M",
-                    "--window-height", "720"]
+                    "--window-height", "720", "--prefer-text", "--no-clipboard-autosync", "--legacy-paste"]
         if maxSize > 0 { args += ["--max-size", String(maxSize)] }
         if !audio { args.append("--no-audio") }
         if stayAwake { args.append("--stay-awake") }
@@ -59,7 +59,7 @@ enum CommandRunner {
     // File-backed output avoids pipe backpressure when adb emits diagnostics.
     static func run(_ executable: URL, _ arguments: [String], timeout: TimeInterval = 8, input: Data? = nil) throws -> CommandResult {
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("android-mirror-\(UUID().uuidString).log")
-        FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+        FileManager.default.createFile(atPath: outputURL.path, contents: nil, attributes: [.posixPermissions: 0o600])
         let handle = try FileHandle(forWritingTo: outputURL)
         defer { try? handle.close(); try? FileManager.default.removeItem(at: outputURL) }
         // A private file also avoids stdin pipe backpressure and keeps text out of argv.

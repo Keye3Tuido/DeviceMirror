@@ -537,10 +537,25 @@ static void test_serialize_scan_file(void) {
     assert(!memcmp(buf, expected, sizeof(expected)));
 }
 
+static void test_direct_text_queue_policy(void) {
+    struct sc_control_msg msg = {.type = SC_CONTROL_MSG_TYPE_DM_DIRECT_TEXT};
+    uint8_t buf[SC_CONTROL_MSG_MAX_SIZE];
+    assert(sc_control_msg_serialize(&msg, buf) == 0);
+    assert(!sc_control_msg_is_droppable(&msg));
+    msg.type = SC_CONTROL_MSG_TYPE_INJECT_KEYCODE;
+    assert(!sc_control_msg_is_droppable(&msg));
+    msg.type = SC_CONTROL_MSG_TYPE_INJECT_TOUCH_EVENT;
+    msg.inject_touch_event.action = AMOTION_EVENT_ACTION_UP;
+    assert(!sc_control_msg_is_droppable(&msg));
+    msg.inject_touch_event.action = AMOTION_EVENT_ACTION_MOVE;
+    assert(sc_control_msg_is_droppable(&msg));
+}
+
 int main(int argc, char *argv[]) {
     (void) argc;
     (void) argv;
 
+    test_direct_text_queue_policy();
     test_serialize_inject_keycode();
     test_serialize_inject_text();
     test_serialize_inject_text_long();

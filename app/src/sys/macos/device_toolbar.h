@@ -14,6 +14,15 @@ void
 sc_device_toolbar_destroy(void *toolbar);
 
 bool
+sc_device_toolbar_send_text(struct sc_controller *controller, const char *text);
+
+void
+sc_device_toolbar_process_text(void *owner, const char *text);
+
+void
+sc_device_toolbar_finish_text(void *owner);
+
+bool
 sc_device_toolbar_is_editing(void *toolbar);
 
 #endif

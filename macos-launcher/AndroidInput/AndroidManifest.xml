@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0; Copyright 2026 Keye3Tuido -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.keye3tuido.devicemirror.input" android:versionCode="1" android:versionName="1.0">
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="36" />
+    <application android:label="Device Mirror 文本输入" android:allowBackup="false" android:supportsRtl="true">
+        <service android:name=".TextInputService" android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true">
+            <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
+            <meta-data android:name="android.view.im" android:resource="@xml/input_method" />
+        </service>
+    </application>
+</manifest>

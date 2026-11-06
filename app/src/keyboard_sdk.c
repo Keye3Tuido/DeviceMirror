@@ -13,6 +13,9 @@
 #include "input_events.h"
 #include "util/intmap.h"
 #include "util/log.h"
+#ifdef __APPLE__
+#include "sys/macos/device_toolbar.h"
+#endif
 
 /** Downcast key processor to sc_keyboard_sdk */
 #define DOWNCAST(KP) container_of(KP, struct sc_keyboard_sdk, key_processor)
@@ -313,6 +316,21 @@ sc_key_processor_process_text(struct sc_key_processor *kp,
             return;
         }
     }
+
+#ifdef __APPLE__
+    if (getenv("DEVICE_MIRROR_TOOLBAR")) {
+        // Non-ASCII commits need InputConnection, rather than KeyCharacterMap.
+        // Raw Latin keys are disabled by --prefer-text so each commit has one path.
+        for (const unsigned char *p = (const unsigned char *)event->text; *p; ++p) {
+            if (*p >= 0x80) {
+                if (!sc_device_toolbar_send_text(kb->controller, event->text)) {
+                    LOGW("Device Mirror: text input queue rejected");
+                }
+                return;
+            }
+        }
+    }
+#endif
 
     struct sc_control_msg msg;
     msg.type = SC_CONTROL_MSG_TYPE_INJECT_TEXT;
