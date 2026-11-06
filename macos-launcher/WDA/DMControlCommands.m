@@ -95,7 +95,15 @@
     }
     previousTime = time;
   }
-  XCUIApplication *app = request.session.activeApplication;
+  NSError *error = nil;
+  if (![self synthesizePath:points application:request.session.activeApplication
+                      name:@"Device Mirror touch path" error:&error]) return FBResponseWithUnknownError(error);
+  return FBResponseWithOK();
+}
+
++ (BOOL)synthesizePath:(NSArray<NSDictionary *> *)points application:(XCUIApplication *)app
+                  name:(NSString *)name error:(NSError **)error
+{
   UIInterfaceOrientation orientation = app.interfaceOrientation;
   // Resolve the rotated coordinate basis once, rather than querying AX for
   // every sample. The touch record preserves the captured sample times.
@@ -110,12 +118,10 @@
     if (path == nil) path = [[XCPointerEventPath alloc] initForTouchAtPoint:point offset:0];
     else [path moveToPoint:point atOffset:[sample[@"time"] doubleValue]];
   }
-  [path liftUpAtOffset:previousTime + 0.001];
-  XCSynthesizedEventRecord *record = [[XCSynthesizedEventRecord alloc] initWithName:@"Device Mirror touch path" interfaceOrientation:orientation];
+  [path liftUpAtOffset:[points.lastObject[@"time"] doubleValue] + 0.001];
+  XCSynthesizedEventRecord *record = [[XCSynthesizedEventRecord alloc] initWithName:name interfaceOrientation:orientation];
   [record addPointerEventPath:path];
-  NSError *error = nil;
-  if (![FBXCTestDaemonsProxy synthesizeEventWithRecord:record error:&error]) return FBResponseWithUnknownError(error);
-  return FBResponseWithOK();
+  return [FBXCTestDaemonsProxy synthesizeEventWithRecord:record error:error];
 }
 
 + (id<FBResponsePayload>)navigation:(FBRouteRequest *)request
@@ -170,13 +176,19 @@
     }
     return FBResponseWithUnknownErrorFormat(@"当前页面未找到可用的返回控件或键盘（%@）。iOS 没有全局返回键；未标注的自定义返回控件请直接点击。", app.bundleID);
   }
-  // Resolve SpringBoard by its bundle ID. The automatic foreground lookup can
-  // select DockFolderViewService, and a Home press may be acknowledged without
-  // leaving the current app on a device without a physical Home button.
-  XCUIApplication *springboard = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.springboard"];
   if ([action isEqual:@"home"]) {
-    [springboard activate];
-    return FBResponseWithOK();
+    // Start at the bottom edge and release while moving upward. A pause at
+    // the end would turn the system's Home gesture into the App Switcher.
+    NSArray *points = @[
+      @{@"x": @0.5, @"y": @1.0,  @"time": @0.0},
+      @{@"x": @0.5, @"y": @0.9,  @"time": @0.04},
+      @{@"x": @0.5, @"y": @0.62, @"time": @0.12},
+      @{@"x": @0.5, @"y": @0.45, @"time": @0.20},
+    ];
+    NSError *error = nil;
+    if (![self synthesizePath:points application:request.session.activeApplication
+                        name:@"Device Mirror bottom-edge Home swipe" error:&error]) return FBResponseWithUnknownError(error);
+    return FBResponseWithObject(@{@"method": @"bottomEdgeSwipe"});
   }
   if (![action isEqual:@"appSwitcher"]) return FBResponseWithUnknownErrorFormat(@"Unsupported navigation action");
   NSError *error = nil;

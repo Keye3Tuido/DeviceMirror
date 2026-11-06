@@ -547,6 +547,7 @@ struct IOSSessionView: View {
             HStack(spacing: 16) {
                 key("返回", "chevron.left") { session.navigation("back") }
                 key("主页", "house") { session.navigation("home") }
+                    .help("从屏幕底边向上快速滑动并松开，返回主屏幕")
                 key("多任务", "square.on.square") { session.navigation("appSwitcher") }
                 key("锁屏", "lock") { session.lock(true) }
                 key("唤醒", "lock.open") { session.lock(false) }
