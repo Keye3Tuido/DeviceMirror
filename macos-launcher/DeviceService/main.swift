@@ -24,13 +24,13 @@ func listDevices() -> [String: Any] {
         for (runtime, rows) in runtimes.sorted(by: { $0.key < $1.key }) where runtime.contains(".iOS-") {
             for row in rows {
                 if let id = row["udid"] as? String, let name = row["name"] as? String, let state = row["state"] as? String {
-                    devices.append(["udid": id, "name": name, "kind": "simulator", "state": state])
+                    devices.append(["udid": id, "name": name, "kind": "simulator", "state": state, "osVersion": runtime.components(separatedBy: ".iOS-").last!.replacingOccurrences(of: "-", with: ".")])
                 }
             }
         }
     }
     for device in (try? USBMux.identities()) ?? [] {
-        devices.append(["udid": device.id, "name": device.name, "kind": "device", "state": "USB"])
+        devices.append(["udid": device.id, "name": device.name, "kind": "device", "state": "USB", "osVersion": device.osVersion])
     }
     return ["devices": devices]
 }
@@ -146,7 +146,7 @@ func runSession(_ options: [String: String]) throws {
     }
     if stop.stopped { return }
     guard ready else { throw serviceError("等待控制服务超时，请检查设备解锁、信任和开发者模式。") }
-    try serviceJSON(["httpPort": Int(httpPort), "mjpegPort": Int(mjpegPort)]).write(to: connection, options: .atomic)
+    try serviceJSON(["httpPort": Int(httpPort), "mjpegPort": Int(mjpegPort), "udid": udid, "kind": kind]).write(to: connection, options: .atomic)
     servicePrint("READY " + base)
     while !stop.stopped {
         if runner.poll() != nil { child = nil; throw serviceError("WebDriverAgent 已断开。") }

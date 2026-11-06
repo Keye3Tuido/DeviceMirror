@@ -6,6 +6,7 @@
 Pass its connection JSON. The check restarts the selected app, tests Home in
 portrait and landscape, then restores rotation. No Mac window is opened.
 """
+from ios_live_client import LiveInput
 import argparse
 import json
 from pathlib import Path
@@ -36,6 +37,8 @@ def main():
     session = request('/session', {'capabilities': {'alwaysMatch': {'shouldWaitForQuiescence': False}}})
     prefix = '/session/' + session['sessionId']
 
+    live = LiveInput(args.connection, request, prefix)
+
     def settings(**values):
         request(prefix + '/appium/settings', {'settings': values})
 
@@ -62,8 +65,7 @@ def main():
 
     def home():
         started = time.monotonic()
-        result = request(prefix + '/wda/devicemirror/navigation', {'action': 'home'})
-        assert result['value']['method'] == 'bottomEdgeSwipe', 'Expected the updated touch-based Home endpoint'
+        live.key('home')
         print(f'Home bottom-edge swipe: {(time.monotonic() - started) * 1000:.0f} ms', flush=True)
         time.sleep(0.6)
 
@@ -88,13 +90,14 @@ def main():
                     assert time.monotonic() < deadline, 'Home must reveal desktop icons and leave App Switcher'
                     time.sleep(0.15)
                 print(f'PASS: {orientation}, active application={active}, Home icons visible', flush=True)
-            request(prefix + '/wda/devicemirror/navigation', {'action': 'appSwitcher'})
+            live.key('appSwitcher')
             time.sleep(0.6)
             assert overview_visible(source()), 'The check must also recognize the real App Switcher'
             settings(defaultActiveApplication='auto')
             home()
             assert not overview_visible(source()), 'A Home swipe must leave App Switcher'
     finally:
+        live.close()
         request(prefix + '/rotation', original_rotation)
         settings(defaultActiveApplication='auto')
 

@@ -6,6 +6,7 @@ import Foundation
 struct USBIdentity: Identifiable, Equatable {
     let id: String
     let name: String
+    var osVersion: String = ""
 }
 
 // Resolve device identities through the usbmuxd service provided by macOS.
@@ -17,26 +18,27 @@ enum USBMux {
         return rows.compactMap { row in
             guard let props = row["Properties"] as? [String: Any], props["ConnectionType"] as? String == "USB",
                   let udid = props["SerialNumber"] as? String, let deviceID = row["DeviceID"] as? Int else { return nil }
-            let name = (try? deviceName(deviceID)) ?? "iOS USB"
-            return USBIdentity(id: udid, name: name)
+            let values = (try? deviceValues(deviceID)) ?? [:]
+            return USBIdentity(id: udid, name: values["DeviceName"] as? String ?? "iOS USB",
+                osVersion: values["ProductVersion"] as? String ?? "")
         }
     }
 
-    private static func deviceName(_ deviceID: Int) throws -> String {
+    private static func deviceValues(_ deviceID: Int) throws -> [String: Any] {
         let connection = try MuxSocket()
         let reply = try connection.request(["MessageType": "Connect", "DeviceID": deviceID,
                                             "PortNumber": UInt16(62078).bigEndian])
         guard reply["Number"] as? Int == 0 else { throw CocoaError(.fileReadUnknown) }
         let payload = try PropertyListSerialization.data(fromPropertyList:
-            ["Request": "GetValue", "Key": "DeviceName", "Label": "DeviceMirror"], format: .xml, options: 0)
+            ["Request": "GetValue", "Label": "DeviceMirror"], format: .xml, options: 0)
         var size = UInt32(payload.count).bigEndian
         try connection.write(withUnsafeBytes(of: &size) { Data($0) } + payload)
         let header = try connection.read(4)
         let length = header.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
         guard length > 0, length < 4 * 1024 * 1024 else { throw CocoaError(.fileReadCorruptFile) }
         let value = try PropertyListSerialization.propertyList(from: connection.read(Int(length)), format: nil) as? [String: Any]
-        guard let name = value?["Value"] as? String else { throw CocoaError(.fileReadCorruptFile) }
-        return name
+        guard let values = value?["Value"] as? [String: Any] else { throw CocoaError(.fileReadCorruptFile) }
+        return values
     }
 }
 

@@ -8,12 +8,14 @@ struct IOSDevice: Identifiable, Decodable {
     let name: String
     let kind: String
     let state: String
+    var osVersion: String? = nil
+    var controlSupport: IOSControlSupport { IOSControlSupport(version: osVersion ?? "") }
     var id: String { udid }
     var isSimulator: Bool { kind == "simulator" }
     var isUSBMirror: Bool { kind == "capture" }
     var subtitle: String {
         if isUSBMirror { return "USB 真机 · 观看画面" }
-        if !isSimulator { return state == "USB" ? "USB 操控" : "USB 操控 · \(state)" }
+        if !isSimulator { return "USB · \(osVersion ?? "版本未知") · " + (controlSupport.supported ? "实时操控" : "控制不支持（需 27+）") }
         let label: String
         switch state {
         case "Booted": label = "运行中"
@@ -22,7 +24,7 @@ struct IOSDevice: Identifiable, Decodable {
         case "Shutting Down": label = "关闭中"
         default: label = state
         }
-        return "模拟器 · \(label)"
+        return "模拟器 · \(osVersion ?? "版本未知") · \(label)" + (controlSupport.supported ? "" : " · 仅观看（控制需 27+）")
     }
 }
 
@@ -146,6 +148,7 @@ final class IOSManager: ObservableObject {
             return
         }
         if let existing = sessions[device.id] { existing.show(); return }
+        if !device.isSimulator && !device.controlSupport.supported { error = device.controlSupport.message; return }
         if !device.isSimulator && selectedSigningTeam.isEmpty && signingTeams.count > 1 {
             error = "请在 USB 操控设置中选择用于设备签名的开发团队。"
             return
@@ -254,6 +257,14 @@ final class IOSSession: NSObject, ObservableObject, NSWindowDelegate {
     private var sessionID: String?
     private var closed = false
     private var commandTask: Task<Void, Never>?
+    private var live: IOSLiveInput?
+    private var orientationTimer: Timer?
+    private var currentOrientation = 1
+    private var refreshingOrientation = false
+    private var backGeneration = 0
+    private var backHeld = false
+    private var backPoint: CGPoint?
+    private var inputHeld = false
     private let http: URLSession = {
         let config = URLSessionConfiguration.ephemeral
         config.connectionProxyDictionary = [:]
@@ -314,6 +325,7 @@ final class IOSSession: NSObject, ObservableObject, NSWindowDelegate {
                     self.preparing = false
                     self.startup?.cancel()
                     self.stream?.stop()
+                    self.live?.stop(); self.live = nil; self.orientationTimer?.invalidate()
                     let details = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
                     if wasConnecting {
                         let lines = details.split(separator: "\n")
@@ -338,8 +350,8 @@ final class IOSSession: NSObject, ObservableObject, NSWindowDelegate {
                     for _ in 0..<600 {
                         try Task.checkCancellation()
                         if let data = try? Data(contentsOf: connection),
-                           let ports = try JSONSerialization.jsonObject(with: data) as? [String: Int],
-                           let httpPort = ports["httpPort"], let videoPort = ports["mjpegPort"] {
+                           let ports = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                           let httpPort = ports["httpPort"] as? Int, let videoPort = ports["mjpegPort"] as? Int {
                             self.base = URL(string: "http://127.0.0.1:\(httpPort)")!
                             try await self.connect(videoPort: videoPort)
                             return
@@ -370,6 +382,7 @@ final class IOSSession: NSObject, ObservableObject, NSWindowDelegate {
         startup?.cancel()
         commandTask?.cancel()
         stream?.stop()
+        live?.stop(); live = nil; orientationTimer?.invalidate(); orientationTimer = nil
         stream = nil
         base = nil
         sessionID = nil
@@ -428,18 +441,42 @@ final class IOSSession: NSObject, ObservableObject, NSWindowDelegate {
         let stream = MJPEGReader()
         stream.onFrame = { [weak self] data in
             MainActor.assumeIsolated {
-                guard let self, !self.closed, self.ready, let image = NSImage(data: data) else { return }
+                guard let self, !self.closed, let image = NSImage(data: data) else { return }
                 self.image = image
             }
         }
         stream.onError = { [weak self] message in
-            Task { @MainActor in self?.status = message; self?.ready = false; self?.stream?.stop() }
+            Task { @MainActor in self?.status = message; self?.ready = false; self?.live?.stop(); self?.stream?.stop() }
         }
         self.stream = stream
         stream.start(URL(string: "http://127.0.0.1:\(videoPort)")!)
         preparing = false
-        ready = true
-        status = "已连接 · 支持点击、滑动、文字和虚拟按键"
+        guard device.controlSupport.supported else {
+            ready = false; status = device.controlSupport.message; return
+        }
+        preparing = true
+        status = "正在建立实时输入通道…"
+        let live = IOSLiveInput()
+        self.live = live
+        live.onReady = { [weak self] in
+            guard let self, !self.closed else { return }
+            self.live?.send(["type": "orientation", "value": self.currentOrientation])
+            self.preparing = false; self.ready = true; self.status = "已连接 · 实时触摸与设备按键"
+        }
+        live.onFailure = { [weak self] message in
+            self?.preparing = false; self?.ready = false; self?.status = message
+        }
+        try await refreshOrientation()
+        try live.start(udid: device.udid, kind: device.kind, log: log)
+        orientationTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.ready, !self.refreshingOrientation, !self.inputHeld else { return }
+                self.refreshingOrientation = true
+                defer { self.refreshingOrientation = false }
+                do { try await self.refreshOrientation() }
+                catch { self.cancelInputs(); self.status = "屏幕方向同步失败，请重新连接。"; self.ready = false; self.live?.stop() }
+            }
+        }
     }
 
     private func perform(success: String = "已连接 · 支持点击、滑动、文字和虚拟按键", _ action: @escaping (String) async throws -> Void) {
@@ -459,28 +496,61 @@ final class IOSSession: NSObject, ObservableObject, NSWindowDelegate {
         }
     }
 
-    func navigation(_ action: String, duration: TimeInterval = 0) {
-        let label = ["back": "返回", "home": "主页", "appSwitcher": "多任务"][action] ?? action
-        perform(success: "\(label)操作已发送") { id in
-            let reply = try await self.request("session/\(id)/wda/devicemirror/navigation",
-                body: ["action": action, "duration": duration], timeout: max(12, duration + 12))
-            if let method = (reply["value"] as? [String: Any])?["method"] as? String {
-                try? self.log?.write(contentsOf: Data("CONTROL RESULT action=\(action) method=\(method)\n".utf8))
-            }
+    func touch(_ phase: String, point: CGPoint) {
+        guard ready else { return }
+        inputHeld = phase == "down" || phase == "move"
+        live?.send(["type": "touch", "phase": phase, "x": point.x, "y": point.y])
+    }
+    func key(_ name: String, phase: String) {
+        guard ready else { return }
+        if name == "back" { back(phase); return }
+        inputHeld = phase == "down"
+        live?.send(["type": "key", "key": name, "phase": phase])
+    }
+    private func back(_ phase: String) {
+        if phase == "cancel" { cancelInputs(); return }
+        if phase == "up" {
+            backHeld = false
+            if let point = backPoint { touch("up", point: point); backPoint = nil }
+            return
+        }
+        guard phase == "down", !backHeld, let id = sessionID else { return }
+        backHeld = true; backGeneration += 1
+        let generation = backGeneration
+        Task {
+            do {
+                let reply = try await request("session/\(id)/wda/devicemirror/navigation", body: ["action": "back", "resolveOnly": true])
+                guard generation == backGeneration, ready, !closed else { return }
+                let value = reply["value"] as? [String: Any] ?? [:]
+                if let x = value["x"] as? Double, let y = value["y"] as? Double {
+                    let targetOrientation = value["orientation"] as? Int ?? currentOrientation
+                    guard targetOrientation == currentOrientation else {
+                        backHeld = false; status = "屏幕方向已变化，请重新执行返回。"; return
+                    }
+                    let point = CGPoint(x: x, y: y)
+                    touch("down", point: point)
+                    if backHeld { backPoint = point } else { touch("up", point: point) }
+                }
+            } catch { if generation == backGeneration { backHeld = false; status = "返回失败：\(error.localizedDescription)" } }
         }
     }
-    func button(_ name: String, duration: TimeInterval = 0) {
-        if duration >= 0.5 {
-            guard let usage = ["volumedown": 0xEA, "volumeup": 0xE9, "power": 0x30][name] else { return }
-            perform { id in
-                _ = try await self.request("session/\(id)/wda/performIoHidEvent",
-                    body: ["page": 0x0C, "usage": usage, "duration": duration], timeout: duration + 12)
-            }
-        } else {
-            perform { id in _ = try await self.request("session/\(id)/wda/pressButton", body: ["name": name]) }
+    private func cancelInputs() {
+        backGeneration += 1; backHeld = false; backPoint = nil; inputHeld = false
+        live?.send(["type": "cancel"])
+    }
+    func windowDidResignKey(_ notification: Notification) { cancelInputs() }
+    private func refreshOrientation() async throws {
+        guard let id = sessionID else { return }
+        let reply = try await request("session/\(id)/wda/devicemirror/display")
+        guard let value = reply["value"] as? [String: Any], let orientation = value["orientation"] as? Int,
+              (1...4).contains(orientation) else { throw URLError(.cannotParseResponse) }
+        if orientation != currentOrientation {
+            cancelInputs(); currentOrientation = orientation
+            live?.send(["type": "orientation", "value": orientation])
         }
     }
     func rotate() {
+        cancelInputs()
         perform(success: "屏幕方向已切换") { id in
             let reply = try await self.request("session/\(id)/orientation")
             guard let current = reply["value"] as? String, ["PORTRAIT", "LANDSCAPE"].contains(current) else {
@@ -490,14 +560,12 @@ final class IOSSession: NSObject, ObservableObject, NSWindowDelegate {
             let target = current == "PORTRAIT" ? "LANDSCAPE" : "PORTRAIT"
             _ = try await self.request("session/\(id)/orientation", body: ["orientation": target])
             let actual = try await self.request("session/\(id)/orientation")["value"] as? String
+            try await self.refreshOrientation()
             guard actual == target else {
                 throw NSError(domain: "DeviceMirror", code: 4,
                     userInfo: [NSLocalizedDescriptionKey: "当前应用未切换方向，请检查方向锁定或应用是否支持横竖屏。"])
             }
         }
-    }
-    func lock(_ lock: Bool) {
-        perform { _ in _ = try await self.request(lock ? "wda/lock" : "wda/unlock", body: [:]) }
     }
     // Preserve keyboard characters while a request is running, combining them
     // into the next text request. Pointer and navigation commands never queue.
@@ -521,25 +589,12 @@ final class IOSSession: NSObject, ObservableObject, NSWindowDelegate {
             if self.text == value { self.text = "" }
         }
     }
-    func tap(_ point: CGPoint) {
-        perform { id in
-            _ = try await self.request("session/\(id)/wda/devicemirror/tap", body: ["x": point.x, "y": point.y])
-        }
-    }
-
-    func gesture(_ samples: [IOSTouchSample]) {
-        guard samples.count >= 2 else { return }
-        perform { id in
-            _ = try await self.request("session/\(id)/wda/devicemirror/gesture",
-                body: ["points": samples.map { $0.payload }], timeout: max(12, (samples.last?.time ?? 0) + 12))
-        }
-    }
-
     func openLog() { if let logURL { NSWorkspace.shared.open(logURL) } }
     func windowWillClose(_ notification: Notification) { stop() }
     func close() { window?.close(); stop() }
     private func stop() {
         guard !closed else { return }
+        cancelInputs(); live?.stop(); live = nil; orientationTimer?.invalidate(); orientationTimer = nil
         closed = true
         queuedTyping = ""
         preparing = false
@@ -570,22 +625,21 @@ struct IOSSessionView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                heldKey("返回", "chevron.left") { session.navigation("back", duration: $0) }
-                heldKey("主页", "house") { session.navigation("home", duration: $0) }
-                    .help("从屏幕底边向上快速滑动并松开，返回主屏幕")
-                heldKey("多任务", "square.on.square") { session.navigation("appSwitcher", duration: $0) }
+                heldKey("返回", "chevron.left", name: "back")
+                heldKey("主页", "house", name: "home")
+                    .help("按下开始从底边向上滑动，松开回到主页；保持按住可停留在多任务手势中")
+                heldKey("多任务", "square.on.square", name: "appSwitcher")
                 key("旋转", "rotate.right") { session.rotate() }.help("切换此设备的横屏与竖屏")
-                heldKey("锁屏", "lock") { if $0 == 0 { session.lock(true) } else { session.button("power", duration: $0) } }
-                heldKey("唤醒", "lock.open") { if $0 == 0 { session.lock(false) } else { session.button("power", duration: $0) } }
+                heldKey("电源", "power", name: "power")
                 if !session.device.isSimulator {
-                    heldKey("音量减", "speaker.minus") { session.button("volumedown", duration: $0) }
-                    heldKey("音量加", "speaker.plus") { session.button("volumeup", duration: $0) }
+                    heldKey("音量减", "speaker.minus", name: "volumedown")
+                    heldKey("音量加", "speaker.plus", name: "volumeup")
                 }
                 Spacer(minLength: 0)
-            }.padding(12).disabled(!session.ready || session.commandBusy)
+            }.padding(12).disabled(!session.ready)
             Divider()
             if let image = session.image {
-                IOSCanvas(image: image, tap: session.tap, type: session.typeText, gesture: session.gesture)
+                IOSCanvas(image: image, enabled: session.ready, touch: session.touch, type: session.typeText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 14) {
@@ -609,7 +663,7 @@ struct IOSSessionView: View {
             HStack(alignment: .top) {
                 Text(session.status).font(.caption).foregroundStyle(.secondary).lineLimit(5).textSelection(.enabled)
                 Spacer()
-                if !session.preparing && !session.ready {
+                if !session.preparing && !session.ready && session.device.controlSupport.supported {
                     Button("重试") { session.retry() }.font(.caption)
                 }
                 Button("日志") { session.openLog() }.font(.caption)
@@ -620,20 +674,21 @@ struct IOSSessionView: View {
         Button(action: action) { VStack(spacing: 4) { Image(systemName: symbol); Text(title).font(.caption2) } }
             .buttonStyle(.plain).help(title)
     }
-    private func heldKey(_ title: String, _ symbol: String, action: @escaping (TimeInterval) -> Void) -> some View {
-        DeviceKeyButton(title: title, symbol: symbol, enabled: session.ready && !session.commandBusy, action: action)
+    private func heldKey(_ title: String, _ symbol: String, name: String) -> some View {
+        DeviceKeyButton(title: title, symbol: symbol, enabled: session.ready) { session.key(name, phase: $0) }
             .frame(width: 35, height: 38)
     }
 }
 
 struct IOSCanvas: NSViewRepresentable {
     let image: NSImage
-    let tap: (CGPoint) -> Void
+    let enabled: Bool
+    let touch: (String, CGPoint) -> Void
     let type: (String) -> Void
-    let gesture: ([IOSTouchSample]) -> Void
     func makeNSView(context: Context) -> IOSCanvasView { IOSCanvasView() }
     func updateNSView(_ view: IOSCanvasView, context: Context) {
-        view.image = image; view.tap = tap; view.type = type; view.gesture = gesture; view.needsDisplay = true
+        if let old = view.image, old.size != image.size { view.cancelTouch() }
+        view.image = image; view.inputEnabled = enabled; view.touch = touch; view.type = type; view.needsDisplay = true
     }
     static func dismantleNSView(_ view: IOSCanvasView, coordinator: ()) { view.cancelTouch() }
 }
@@ -666,7 +721,7 @@ struct IOSLauncherView: View {
                                 Button("显示") { model.open(device) }
                                 Button("停止") { model.stop(device) }
                             } else {
-                                Button(device.isUSBMirror ? "查看镜像" : device.isSimulator && device.state != "Booted" ? "启动并连接" : "连接") { model.open(device) }
+                                Button(device.isUSBMirror ? "查看镜像" : !device.controlSupport.supported ? (device.isSimulator ? "观看" : "控制不支持") : device.isSimulator && device.state != "Booted" ? "启动并连接" : "连接") { model.open(device) }
                             }
                         }.padding(12).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
                     }
@@ -676,7 +731,7 @@ struct IOSLauncherView: View {
                 }
             }.frame(height: 300)
             Divider()
-            Text("观看真机画面请选择“查看镜像”；从电脑操控请选择“USB 操控”。首次观看需允许采集权限，USB 操控需先配置下方 Apple 账号。")
+            Text("实时操控需要 iOS / iPadOS 27 或以上及 Xcode 27 或以上。低版本可观看镜像。真机操控还需在下方配置用于文字、返回和旋转功能的 Apple 开发团队。")
                 .font(.caption).foregroundStyle(.secondary).lineSpacing(4).fixedSize(horizontal: false, vertical: true)
             DisclosureGroup("USB 操控：配置 Apple 账号", isExpanded: $model.showDeviceControl) {
                 IOSSigningView(model: model).padding(.top, 8)

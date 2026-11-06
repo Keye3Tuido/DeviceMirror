@@ -10,6 +10,10 @@ xcrun swiftc -swift-version 5 Sources/MirrorGeometry.swift Sources/IOSCanvasView
 .build/canvas-tests
 xcrun swiftc -swift-version 5 Sources/DeviceKeyButton.swift tests/KeyButtonTests.swift -o .build/key-button-tests
 .build/key-button-tests
+xcrun swiftc -swift-version 5 Sources/IOSInput.swift tests/IOSControlTests.swift -o .build/ios-control-tests
+.build/ios-control-tests
+xcrun clang -fobjc-arc tests/IOSHIDTests.m -framework Foundation -o .build/ios-hid-tests
+.build/ios-hid-tests
 xcrun swiftc -swift-version 5 Sources/AndroidCore.swift Sources/USBMux.swift DeviceService/ServiceSupport.swift DeviceService/USBForwarder.swift tests/ServiceTests.swift -o .build/service-tests
 .build/service-tests
 xcrun cc -std=c11 -Wall -Wextra tests/EdgeGeometryTests.c -o .build/edge-tests

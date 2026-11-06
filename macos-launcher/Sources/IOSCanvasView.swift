@@ -2,22 +2,14 @@
 // Copyright 2026 Keye3Tuido
 import AppKit
 
-struct IOSTouchSample {
-    let point: CGPoint
-    let time: TimeInterval
-    var payload: [String: Double] { ["x": point.x, "y": point.y, "time": time] }
-}
-
 class IOSCanvasView: NSView {
     var image: NSImage?
     var displayedSize: CGSize?
-    var tap: ((CGPoint) -> Void)?
+    var inputEnabled = true { didSet { if !inputEnabled { cancelTouch() } } }
+    var touch: ((String, CGPoint) -> Void)?
     var type: ((String) -> Void)?
-    var gesture: (([IOSTouchSample]) -> Void)?
-    private var samples: [IOSTouchSample] = []
+    private var lastPoint: CGPoint?
     private var touchRect = CGRect.zero
-    private var startedAt: TimeInterval = 0
-    private var dragged = false
     private var focusObserver: NSObjectProtocol?
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -30,7 +22,8 @@ class IOSCanvasView: NSView {
         if let focusObserver { NotificationCenter.default.removeObserver(focusObserver) }
         cancelTouch()
         guard let window else { focusObserver = nil; return }
-        focusObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: .main) { [weak self] _ in self?.cancelTouch() }
+        focusObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification,
+            object: window, queue: .main) { [weak self] _ in self?.cancelTouch() }
     }
     deinit { if let focusObserver { NotificationCenter.default.removeObserver(focusObserver) } }
     override func draw(_ dirtyRect: NSRect) {
@@ -40,46 +33,33 @@ class IOSCanvasView: NSView {
     override func mouseDown(with event: NSEvent) {
         cancelTouch()
         let point = convert(event.locationInWindow, from: nil)
-        guard imageRect.contains(point) else { return }
+        guard inputEnabled, imageRect.contains(point) else { return }
         touchRect = imageRect
-        startedAt = event.timestamp
-        samples = [IOSTouchSample(point: MirrorGeometry.normalized(point, in: touchRect), time: 0)]
+        let normalized = MirrorGeometry.normalized(point, in: touchRect)
+        lastPoint = normalized
+        touch?("down", normalized)
         window?.makeFirstResponder(self)
     }
-    private func append(_ event: NSEvent) {
-        guard !samples.isEmpty else { return }
-        // Resizing or rotating during a drag invalidates its coordinate space.
-        guard touchRect == imageRect else { cancelTouch(); return }
+    private func send(_ phase: String, event: NSEvent) {
+        guard lastPoint != nil else { return }
+        guard inputEnabled, touchRect == imageRect else { cancelTouch(); return }
         let point = MirrorGeometry.normalized(convert(event.locationInWindow, from: nil), in: touchRect)
-        let first = samples[0].point
-        if hypot((point.x - first.x) * touchRect.width, (point.y - first.y) * touchRect.height) > 5 { dragged = true }
-        let time = max(samples.last!.time + 0.001, event.timestamp - startedAt)
-        // Keep the trajectory bounded without changing its timing or endpoints.
-        if samples.count >= 512 {
-            samples = samples.enumerated().filter { $0.offset % 2 == 0 || $0.offset == 511 }.map { $0.element }
-        }
-        samples.append(IOSTouchSample(point: point, time: time))
+        lastPoint = phase == "up" ? nil : point
+        touch?(phase, point)
     }
-    override func mouseDragged(with event: NSEvent) { append(event) }
-    override func mouseUp(with event: NSEvent) {
-        append(event)
-        defer { cancelTouch() }
-        guard let last = samples.last else { return }
-        if dragged || last.time >= 0.5 {
-            // Replay the recorded touch, including pauses, after mouse release.
-            // No direction or edge is interpreted as a navigation command.
-            gesture?(samples)
-        } else if touchRect.contains(convert(event.locationInWindow, from: nil)) {
-            tap?(last.point)
-        }
-    }
+    override func mouseDragged(with event: NSEvent) { send("move", event: event) }
+    override func mouseUp(with event: NSEvent) { send("up", event: event) }
     override func scrollWheel(with event: NSEvent) { }
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 { cancelTouch(); return }
-        if let text = event.characters, !event.modifierFlags.contains(.command) { type?(text) }
+        if inputEnabled, let text = event.characters, !event.modifierFlags.contains(.command) { type?(text) }
     }
     @objc func paste(_ sender: Any?) {
-        if let text = NSPasteboard.general.string(forType: .string) { type?(text) }
+        if inputEnabled, let text = NSPasteboard.general.string(forType: .string) { type?(text) }
     }
-    func cancelTouch() { samples = []; dragged = false }
+    func cancelTouch() {
+        guard let point = lastPoint else { return }
+        lastPoint = nil
+        touch?("cancel", point)
+    }
 }

@@ -18,6 +18,7 @@ assert info['CFBundleExecutable'] == 'DeviceMirror'
 assert 'NSBluetoothAlwaysUsageDescription' not in info
 assert (app / 'Contents/Resources/AndroidInput/device-mirror-input.apk').is_file()
 assert (app / 'Contents/Helpers/android-input').is_file()
+assert (app / 'Contents/Helpers/ios-input').is_file()
 assert not list(app.rglob('*.app')), 'Unexpected nested app entry'
 assert not list(app.rglob('ios_bridge.py')) and not list(app.rglob('idevice_tools'))
 binaries = [app / 'Contents/MacOS/DeviceMirror', *list((app / 'Contents/Helpers').iterdir()), *list((app / 'Contents/Frameworks').glob('*.dylib'))]
@@ -34,6 +35,8 @@ assert (third_party / 'Android-tools/libusb-1.0.30.tar.bz2').is_file()
 assert (third_party / 'Android-tools/android-tools-37.0.0p1.tar.xz').is_file()
 assert (third_party / 'Android-tools/utf8_range-LICENSE').is_file()
 assert (third_party / 'Sources/ffmpeg-n9.0.2.tar.gz').is_file()
+for name in ('ipb-MIT.txt', 'idb-MIT.txt', 'README.md'):
+    assert (third_party / 'ios-control' / name).is_file()
 # Launch helpers from a copied app, with no SDK, Homebrew or Python in PATH.
 # The native main executable is deliberately not started: it would open a window.
 with tempfile.TemporaryDirectory(prefix='DeviceMirror-portable-') as directory:
@@ -42,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix='DeviceMirror-portable-') as directory:
     env = {key: value for key, value in os.environ.items() if key in ('HOME', 'USER', 'TMPDIR', 'LANG', 'LOGNAME')}
     env['PATH'] = '/usr/bin:/bin:/usr/sbin:/sbin'
     env['SCRCPY_SERVER_PATH'] = str(relocated / 'Contents/Resources/scrcpy/scrcpy-server')
-    for name, args in [('adb', ['version']), ('scrcpy', ['--version']), ('device-service', ['--list'])]:
+    for name, args in [('adb', ['version']), ('scrcpy', ['--version']), ('device-service', ['--list']), ('ios-input', ['--version'])]:
         result = subprocess.run([str(relocated / 'Contents/Helpers' / name), *args], cwd=directory, env=env, capture_output=True, text=True, timeout=30, check=True)
         if name == 'device-service':
             assert isinstance(json.loads(result.stdout)['devices'], list)

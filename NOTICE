@@ -12,8 +12,12 @@ hardware keys with held-key timing and manual orientation locking,
 direct Unicode input via a self-authored Android IME,
 per-device logcat recording;
 account-free AVFoundation USB viewing; native USB forwarding and signing service;
-WebDriverAgent-based iOS device/simulator clicks, touch trajectories, holds,
-text, navigation buttons, held keys and interface rotation.
+iOS 27+ native CoreDevice/DTUHID live touch and key phases;
+WebDriverAgent-based text, Back-target discovery and interface rotation.
+NativeIOS adapts MIT-licensed ipb and idb code.
+ipb: Copyright (c) 2026 Borealin and ipbtools contributors.
+idb: Copyright (c) Meta Platforms, Inc. and affiliates.
+Full MIT licenses and pinned provenance are bundled in ThirdParty/ios-control.
 The packaged WDA source imports the Apache-2.0 Device Mirror DMControlCommands extension
 from FBTouchActionCommands.m; upstream BSD headers and license are retained.
 The fixed upstream submodule is unchanged.

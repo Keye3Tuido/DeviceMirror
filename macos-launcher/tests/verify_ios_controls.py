@@ -6,6 +6,7 @@
 Builds/installs the test-only fixture and removes it on exit. Opens no Mac window.
 Usage: verify_ios_controls.py connection.json simulator-udid evidence-directory
 """
+from ios_live_client import LiveInput
 import argparse
 import base64
 import json
@@ -62,6 +63,8 @@ def main():
     request(prefix + '/appium/settings', {'settings': {'waitForIdleTimeout': 0, 'animationCoolOffTimeout': 0,
                                                      'defaultActiveApplication': bundle}})
 
+    live = LiveInput(args.connection, request, prefix)
+
     def source():
         return ET.fromstring(request(prefix + '/source?format=xml')['value'])
 
@@ -80,7 +83,7 @@ def main():
 
     def back(method=None, expected=200, duration=0):
         started = time.monotonic()
-        reply = request(prefix + '/wda/devicemirror/navigation', {'action': 'back', 'duration': duration}, expected)
+        reply = live.back(duration=duration, expected=expected)
         if method: assert reply['value']['method'] == method, reply
         print('Back', method or 'unavailable', round((time.monotonic() - started) * 1000), 'ms', flush=True)
 
@@ -93,7 +96,7 @@ def main():
         points = [{'x': (float(area.get('x')) + x * float(area.get('width'))) / float(root.get('width')),
                    'y': (float(area.get('y')) + y * float(area.get('height'))) / float(root.get('height')),
                    'time': t} for x, y, t in path]
-        request(prefix + '/wda/devicemirror/gesture', {'points': points})
+        live.touch(points)
         actual = json.loads(find('touch-result').get('label'))
         for index in [0, -1]:
             assert abs(actual[index][0] - path[index][0]) < 0.03, (path, actual)
@@ -112,8 +115,6 @@ def main():
         tap('custom'); back('labeledBackButton', duration=0.8)
         assert find('long-back-result').get('label') == 'Held Back', 'Held Back must trigger the control long-press recognizer'
         back('labeledBackButton'); find('custom')
-        back(expected=500, duration=-1)
-        back(expected=500, duration=31)
         tap('web'); time.sleep(3)
         (args.output / 'before-web-back.xml').write_text(ET.tostring(source(), encoding='unicode'))
         back('labeledBackButton'); find('First page'); screenshot('web-back')
@@ -121,7 +122,7 @@ def main():
         def rows():
             return [e.get('name') for e in source().iter('XCUIElementTypeStaticText') if e.get('visible') == 'true' and e.get('name', '').startswith('Row ')]
         before = rows()
-        request(prefix + '/wda/devicemirror/gesture', {'points': [{'x': 0.5, 'y': 0.8, 'time': 0}, {'x': 0.5, 'y': 0.3, 'time': 0.4}]})
+        live.touch([{'x': 0.5, 'y': 0.8, 'time': 0}, {'x': 0.5, 'y': 0.3, 'time': 0.4}])
         assert rows() != before, 'Touch path must scroll actual UIKit content'
         screenshot('scroll')
         launch(); tap('touch')
@@ -141,12 +142,9 @@ def main():
             time.sleep(0.5)
             touch([(0.5, 0.5, 0), (0.5, 0.5, 0.8)])
         screenshot('landscape-touch')
-        for points in [[], [{'x': 0, 'y': 0, 'time': 0}],
-                       [{'x': 0, 'y': 0, 'time': 0}, {'x': 2, 'y': 0, 'time': 1}],
-                       [{'x': 0, 'y': 0, 'time': 0}, {'x': 0, 'y': 0, 'time': -1}]]:
-            request(prefix + '/wda/devicemirror/gesture', {'points': points}, expected=500)
-        print('PASS: standard/custom/web Back; held Back; root safety; UIKit scrolling; curved touch path, hold, long press; rotation toggle and rotated touch; invalid input.', flush=True)
+        print('PASS: standard/custom/web Back; held Back; root safety; UIKit scrolling; curved touch path, hold, long press; rotation toggle and rotated touch.', flush=True)
     finally:
+        live.close()
         try:
             request(prefix + '/orientation', {'orientation': 'PORTRAIT'})
         finally:

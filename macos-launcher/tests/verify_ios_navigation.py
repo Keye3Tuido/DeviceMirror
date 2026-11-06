@@ -7,6 +7,7 @@ Start the device on a page with a standard navigation Back button. This check
 navigates back from that page, opens Home and opens the App Switcher.
 Pass the device-service connection JSON and a directory for screenshot evidence.
 """
+from ios_live_client import LiveInput
 import argparse
 import base64
 import json
@@ -38,6 +39,8 @@ def main():
     prefix = '/session/' + session['sessionId']
     request(prefix + '/appium/settings', {'settings': {'waitForIdleTimeout': 0, 'animationCoolOffTimeout': 0}})
 
+    live = LiveInput(args.connection, request, prefix)
+
     def source():
         return ET.fromstring(request(prefix + '/source?format=xml')['value'])
 
@@ -49,7 +52,7 @@ def main():
 
     def navigation(action):
         started = time.monotonic()
-        request(prefix + '/wda/devicemirror/navigation', {'action': action})
+        live.back() if action == 'back' else live.key(action)
         print(f'{action}: {(time.monotonic() - started) * 1000:.0f} ms', flush=True)
         time.sleep(0.6)
 
@@ -77,6 +80,7 @@ def main():
                    for e in switcher.iter()), 'App Switcher acknowledged but no overview card visible'
         screenshot('app-switcher')
     finally:
+        live.close()
         request(prefix + '/appium/settings', {'settings': {'defaultActiveApplication': 'auto'}})
     print('PASS: Back changes page; Home shows icons; App Switcher shows an overview card.', flush=True)
 

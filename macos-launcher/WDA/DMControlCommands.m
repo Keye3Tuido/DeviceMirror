@@ -3,7 +3,6 @@
 #import "FBCommandHandler.h"
 #import "FBRouteRequest.h"
 #import "FBSession.h"
-#import "FBXCTestDaemonsProxy.h"
 #import "XCUIScreen.h"
 #import "XCUIElement+FBUtilities.h"
 #import "XCUIApplication+FBHelpers.h"
@@ -11,8 +10,6 @@
 #import "FBKeyboard.h"
 #import "XCUIApplication.h"
 #import "XCUIDevice.h"
-#import "XCSynthesizedEventRecord.h"
-#import "XCPointerEventPath.h"
 #import <math.h>
 
 @interface DMControlCommands : NSObject <FBCommandHandler>
@@ -23,8 +20,7 @@
 {
   return @[
     [[FBRoute GET:@"/wda/devicemirror/info"].withoutSession respondWithTarget:self action:@selector(info:)],
-    [[FBRoute POST:@"/wda/devicemirror/tap"] respondWithTarget:self action:@selector(tap:)],
-    [[FBRoute POST:@"/wda/devicemirror/gesture"] respondWithTarget:self action:@selector(gesture:)],
+    [[FBRoute GET:@"/wda/devicemirror/display"] respondWithTarget:self action:@selector(display:)],
     [[FBRoute POST:@"/wda/devicemirror/navigation"] respondWithTarget:self action:@selector(navigation:)],
   ];
 }
@@ -35,105 +31,32 @@
     @"screenWidth": @(XCUIScreen.mainScreen.bounds.size.width), @"screenHeight": @(XCUIScreen.mainScreen.bounds.size.height)});
 }
 
-+ (id<FBResponsePayload>)tap:(FBRouteRequest *)request
++ (id<FBResponsePayload>)display:(FBRouteRequest *)request
 {
-  id x = request.arguments[@"x"], y = request.arguments[@"y"];
-  if (![x isKindOfClass:NSNumber.class] || ![y isKindOfClass:NSNumber.class]
-      || !isfinite([x doubleValue]) || !isfinite([y doubleValue])
-      || [x doubleValue] < 0 || [x doubleValue] > 1 || [y doubleValue] < 0 || [y doubleValue] > 1) {
-    return FBResponseWithUnknownErrorFormat(@"Expected normalized screen coordinates");
-  }
-  XCUIApplication *app = request.session.activeApplication;
-  UIInterfaceOrientation orientation = app.interfaceOrientation;
-  CGPoint point = [self screenPoint:CGPointMake([x doubleValue], [y doubleValue]) application:app orientation:orientation];
-  XCPointerEventPath *path = [[XCPointerEventPath alloc] initForTouchAtPoint:point offset:0];
-  [path liftUpAtOffset:0.035];
-  XCSynthesizedEventRecord *record = [[XCSynthesizedEventRecord alloc] initWithName:@"Device Mirror click" interfaceOrientation:orientation];
-  [record addPointerEventPath:path];
-  NSError *error = nil;
-  if (![FBXCTestDaemonsProxy synthesizeEventWithRecord:record error:&error]) return FBResponseWithUnknownError(error);
-  return FBResponseWithOK();
+  return FBResponseWithObject(@{@"orientation": @(request.session.activeApplication.interfaceOrientation)});
 }
 
-+ (CGPoint)screenPoint:(CGPoint)normalized application:(XCUIApplication *)app orientation:(UIInterfaceOrientation)orientation
++ (id<FBResponsePayload>)backTarget:(XCUIElement *)button application:(XCUIApplication *)app method:(NSString *)method
 {
-  // Screen coordinates avoid resolving several accessibility coordinates for
-  // every click. Orientation still comes from the foreground interface, so a
-  // rotation-locked device is not mapped using its physical orientation.
-  XCUIScreen *screen = XCUIScreen.mainScreen;
-  CGSize native = CGSizeMake(screen.bounds.size.width / screen.scale, screen.bounds.size.height / screen.scale);
-  CGFloat shortSide = MIN(native.width, native.height), longSide = MAX(native.width, native.height);
-  CGSize size = UIInterfaceOrientationIsLandscape(orientation) ? CGSizeMake(longSide, shortSide) : CGSizeMake(shortSide, longSide);
-  CGPoint point = CGPointMake(MIN(size.width - 1, normalized.x * size.width), MIN(size.height - 1, normalized.y * size.height));
-  // XCTest rotates application coordinates for landscape and upside-down.
-  // Resolve one coordinate in those orientations; portrait needs no AX lookup.
-  if (orientation != UIInterfaceOrientationPortrait && orientation != UIInterfaceOrientationUnknown) {
-    XCUICoordinate *origin = [app coordinateWithNormalizedOffset:CGVectorMake(0, 0)];
-    point = [origin coordinateWithOffset:CGVectorMake(point.x, point.y)].screenPoint;
+  CGRect frame = button.frame;
+  CGSize size = app.frame.size;
+  if (CGRectIsEmpty(frame) || size.width <= 0 || size.height <= 0) {
+    return FBResponseWithUnknownErrorFormat(@"无法读取返回控件的位置，请直接点击画面中的返回按钮。");
   }
-  return point;
-}
-
-+ (id<FBResponsePayload>)gesture:(FBRouteRequest *)request
-{
-  NSArray *points = request.arguments[@"points"];
-  if (![points isKindOfClass:NSArray.class] || points.count < 2 || points.count > 512) {
-    return FBResponseWithUnknownErrorFormat(@"滑动需要 2 至 512 个轨迹点。");
+  double x = CGRectGetMidX(frame) / size.width, y = CGRectGetMidY(frame) / size.height;
+  if (!isfinite(x) || !isfinite(y) || x < 0 || x > 1 || y < 0 || y > 1) {
+    return FBResponseWithUnknownErrorFormat(@"返回控件位于当前画面之外。");
   }
-  double previousTime = -1;
-  for (id sample in points) {
-    if (![sample isKindOfClass:NSDictionary.class]) return FBResponseWithUnknownErrorFormat(@"Invalid touch sample");
-    for (NSString *key in @[@"x", @"y", @"time"]) {
-      id value = sample[key];
-      if (![value isKindOfClass:NSNumber.class] || !isfinite([value doubleValue])) {
-        return FBResponseWithUnknownErrorFormat(@"Invalid touch sample");
-      }
-    }
-    double x = [sample[@"x"] doubleValue], y = [sample[@"y"] doubleValue], time = [sample[@"time"] doubleValue];
-    if (x < 0 || x > 1 || y < 0 || y > 1 || time <= previousTime || time > 30 || (previousTime < 0 && time != 0)) {
-      return FBResponseWithUnknownErrorFormat(@"轨迹坐标应在画面内，时间须从零递增且不超过 30 秒。");
-    }
-    previousTime = time;
-  }
-  NSError *error = nil;
-  if (![self synthesizePath:points application:request.session.activeApplication
-                      name:@"Device Mirror touch path" error:&error]) return FBResponseWithUnknownError(error);
-  return FBResponseWithOK();
-}
-
-+ (BOOL)synthesizePath:(NSArray<NSDictionary *> *)points application:(XCUIApplication *)app
-                  name:(NSString *)name error:(NSError **)error
-{
-  UIInterfaceOrientation orientation = app.interfaceOrientation;
-  // Resolve the rotated coordinate basis once, rather than querying AX for
-  // every sample. The touch record preserves the captured sample times.
-  CGPoint origin = [self screenPoint:CGPointZero application:app orientation:orientation];
-  CGPoint right = [self screenPoint:CGPointMake(1, 0) application:app orientation:orientation];
-  CGPoint bottom = [self screenPoint:CGPointMake(0, 1) application:app orientation:orientation];
-  XCPointerEventPath *path = nil;
-  for (NSDictionary *sample in points) {
-    CGFloat x = [sample[@"x"] doubleValue], y = [sample[@"y"] doubleValue];
-    CGPoint point = CGPointMake(origin.x + x * (right.x - origin.x) + y * (bottom.x - origin.x),
-                               origin.y + x * (right.y - origin.y) + y * (bottom.y - origin.y));
-    if (path == nil) path = [[XCPointerEventPath alloc] initForTouchAtPoint:point offset:0];
-    else [path moveToPoint:point atOffset:[sample[@"time"] doubleValue]];
-  }
-  [path liftUpAtOffset:[points.lastObject[@"time"] doubleValue] + 0.001];
-  XCSynthesizedEventRecord *record = [[XCSynthesizedEventRecord alloc] initWithName:name interfaceOrientation:orientation];
-  [record addPointerEventPath:path];
-  return [FBXCTestDaemonsProxy synthesizeEventWithRecord:record error:error];
+  return FBResponseWithObject(@{@"x": @(x), @"y": @(y), @"orientation": @(app.interfaceOrientation), @"method": method});
 }
 
 + (id<FBResponsePayload>)navigation:(FBRouteRequest *)request
 {
   NSString *action = request.arguments[@"action"];
-  id rawDuration = request.arguments[@"duration"] ?: @0;
-  if (![rawDuration isKindOfClass:NSNumber.class] || !isfinite([rawDuration doubleValue])
-      || [rawDuration doubleValue] < 0 || [rawDuration doubleValue] > 30) {
-    return FBResponseWithUnknownErrorFormat(@"按住时长须在 0 到 30 秒之间。");
+  if (![action isEqual:@"back"] || ![request.arguments[@"resolveOnly"] isEqual:@YES]) {
+    return FBResponseWithUnknownErrorFormat(@"控制需要 iOS / iPadOS 27 或以上的实时输入通道。");
   }
-  double duration = [rawDuration doubleValue];
-  if ([action isEqual:@"back"]) {
+  {
     XCUIApplication *app = request.session.activeApplication;
     // UIKit's standard navigation Back button carries the accessibility Back
     // trait (bit 27), or the BackButton identifier used by newer system apps.
@@ -145,9 +68,7 @@
         id<FBXCElementSnapshot> snapshot = button.fb_standardSnapshot;
         if ((snapshot.traits & backTrait) == 0 && ![snapshot.identifier isEqualToString:@"BackButton"]) continue;
         if (!button.enabled || !button.hittable) continue;
-        if (duration >= 0.5) [button pressForDuration:duration];
-        else [button tap];
-        return FBResponseWithObject(@{@"method": @"navigationButton"});
+        return [self backTarget:button application:app method:@"navigationButton"];
       }
     }
     // Web views and custom screens may expose Back outside a navigation bar.
@@ -165,15 +86,10 @@
       if (button.enabled && button.hittable) [available addObject:button];
     }
     if (available.count == 1) {
-      if (duration >= 0.5) [available.firstObject pressForDuration:duration];
-      else [available.firstObject tap];
-      return FBResponseWithObject(@{@"method": @"labeledBackButton"});
+      return [self backTarget:available.firstObject application:app method:@"labeledBackButton"];
     }
     if (available.count > 1) {
       return FBResponseWithUnknownErrorFormat(@"当前页面有多个返回控件，请直接点击需要的那个。");
-    }
-    if (duration >= 0.5) {
-      return FBResponseWithUnknownErrorFormat(@"当前页面未找到可长按的返回控件，请在画面中直接长按目标按钮。");
     }
     // At a navigation root, Back first dismisses a visible keyboard.
     if ([FBKeyboard waitUntilVisibleForApplication:app timeout:0 error:nil]) {
@@ -187,35 +103,5 @@
     }
     return FBResponseWithUnknownErrorFormat(@"当前页面未找到可用的返回控件或键盘（%@）。iOS 没有全局返回键；未标注的自定义返回控件请直接点击。", app.bundleID);
   }
-  if ([action isEqual:@"home"]) {
-    if (duration >= 0.5) {
-      NSError *error = nil;
-      if (![XCUIDevice.sharedDevice fb_performIOHIDEventWithPage:0x0C usage:0x40 duration:duration error:&error]) {
-        return FBResponseWithUnknownError(error);
-      }
-      return FBResponseWithObject(@{@"method": @"heldHomeKey"});
-    }
-    // Start at the bottom edge and release while moving upward. A pause at
-    // the end would turn the system's Home gesture into the App Switcher.
-    NSArray *points = @[
-      @{@"x": @0.5, @"y": @1.0,  @"time": @0.0},
-      @{@"x": @0.5, @"y": @0.9,  @"time": @0.04},
-      @{@"x": @0.5, @"y": @0.62, @"time": @0.12},
-      @{@"x": @0.5, @"y": @0.45, @"time": @0.20},
-    ];
-    NSError *error = nil;
-    if (![self synthesizePath:points application:request.session.activeApplication
-                        name:@"Device Mirror bottom-edge Home swipe" error:&error]) return FBResponseWithUnknownError(error);
-    return FBResponseWithObject(@{@"method": @"bottomEdgeSwipe"});
-  }
-  if (![action isEqual:@"appSwitcher"]) return FBResponseWithUnknownErrorFormat(@"Unsupported navigation action");
-  NSError *error = nil;
-  // Apple vendor keyboard usage for the system App Switcher. A single device
-  // event works independently of screen orientation, app geometry and Dock.
-  // This explicit navigation command is independent of recorded mouse drags.
-  if (![XCUIDevice.sharedDevice fb_performIOHIDEventWithPage:0xFF01 usage:0x10 duration:MAX(0.08, duration) error:&error]) {
-    return FBResponseWithUnknownError(error);
-  }
-  return FBResponseWithOK();
 }
 @end

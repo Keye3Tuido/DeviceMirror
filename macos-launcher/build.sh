@@ -46,6 +46,8 @@ cp /opt/homebrew/opt/sdl3/share/licenses/SDL3/LICENSE.txt "$resources/ThirdParty
 cp .build/ffmpeg-src/COPYING.LGPLv2.1 "$resources/ThirdParty/FFmpeg-LGPL-2.1.txt"
 cp ../NOTICE ../THIRD_PARTY.md "$resources/ThirdParty/"
 xcrun swiftc -O -swift-version 5 -target arm64-apple-macos26.0 Sources/AndroidCore.swift Sources/USBMux.swift DeviceService/*.swift -o "$helpers/device-service"
+xcrun clang -O2 -fobjc-arc -fblocks -target arm64-apple-macos26.0 NativeIOS/main.m -framework Foundation -o "$helpers/ios-input"
+cp -R ../third_party/ios-control "$resources/ThirdParty/ios-control"
 for tool in "$helpers/"*; do codesign --force --sign - "$tool"; done
 cp prepare-deps.sh "$resources/ThirdParty/Sources/ffmpeg-build.sh"
 cp prepare-wda.py "$resources/ThirdParty/Sources/"
@@ -61,8 +63,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.keye3tuido.devicemirror</string>
 <key>CFBundleExecutable</key><string>DeviceMirror</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.5.7</string>
-<key>CFBundleVersion</key><string>17</string>
+<key>CFBundleShortVersionString</key><string>0.6.0</string>
+<key>CFBundleVersion</key><string>18</string>
 <key>CFBundleIconFile</key><string>AppIcon.png</string>
 <key>LSMinimumSystemVersion</key><string>26.0</string>
 <key>NSHighResolutionCapable</key><true/>
@@ -75,7 +77,11 @@ PLIST
 for library in "$frameworks/"*.dylib; do codesign --force --sign - "$library"; done
 codesign --force --sign - "$app"
 codesign --verify --deep --strict "$app"
-destination="$root/Device Mirror.app"
+if [[ -n "${DEVICE_MIRROR_BUILD_OUTPUT:-}" ]]; then
+    destination="$DEVICE_MIRROR_BUILD_OUTPUT"
+else
+    destination="$root/Device Mirror.app"
+fi
 # Keep an active app's executable and resources intact during rebuilds.
 python3 - "$destination" <<'PYTHON'
 import subprocess
@@ -85,6 +91,7 @@ processes = subprocess.check_output(["ps", "-axo", "comm="], text=True).splitlin
 if executable in (line.strip() for line in processes):
     sys.exit("请先退出仓库根目录的 Device Mirror.app，再替换构建产物。")
 PYTHON
+mkdir -p "$(dirname "$destination")"
 rm -rf "$destination"
 mv "$app" "$destination"
 echo "已生成：$destination"
