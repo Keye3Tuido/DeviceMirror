@@ -20,7 +20,9 @@ ARCHIVES = {
 ENV = os.environ.copy()
 for name in ('CPATH', 'C_INCLUDE_PATH', 'CPLUS_INCLUDE_PATH', 'OBJC_INCLUDE_PATH', 'LIBRARY_PATH', 'SDKROOT', 'MACOSX_DEPLOYMENT_TARGET'):
     ENV.pop(name, None)
-ENV['MACOSX_DEPLOYMENT_TARGET'] = '26.0'
+TARGET = os.environ.get('MACOSX_DEPLOYMENT_TARGET', '13.0')
+ENV['MACOSX_DEPLOYMENT_TARGET'] = TARGET
+PORTABLE = ROOT / '.build/portable-deps' / ('macos' + TARGET) / 'install'
 ENV['PATH'] = '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin'
 
 
@@ -53,7 +55,7 @@ def build():
     usb = work / 'libusb-1.0.30'
     install = work / 'usb-install'
     usb_configuration = install / '.device-mirror-config'
-    expected_configuration = 'macos26-pipe-fallback-v2-availability\n'
+    expected_configuration = 'macos' + TARGET + '-pipe-fallback-v2-availability\n'
     if (not (install / 'lib/libusb-1.0.0.dylib').exists() or not usb_configuration.exists()
             or usb_configuration.read_text() != expected_configuration):
         run('tar', '-xf', sources['libusb-1.0.30.tar.bz2'], '-C', work)
@@ -66,7 +68,7 @@ def build():
         run('make', '-j6', cwd=usb)
         run('make', 'install', cwd=usb)
         usb_configuration.write_text(expected_configuration)
-    ENV['PKG_CONFIG_PATH'] = str(install / 'lib/pkgconfig')
+    ENV['PKG_CONFIG_PATH'] = str(install / 'lib/pkgconfig') + ':' + str(PORTABLE / 'lib/pkgconfig')
     source = work / 'android-tools-37.0.0p1'
     if not source.exists():
         run('tar', '-xf', sources['android-tools-37.0.0p1.tar.xz'], '-C', work)
@@ -79,7 +81,9 @@ def build():
     build_dir = work / 'build'
     run('cmake', '-S', source, '-B', build_dir, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
         '-DANDROID_TOOLS_PATCH_VENDOR=OFF', '-DANDROID_TOOLS_USE_BUNDLED_FMT=ON',
-        '-DANDROID_TOOLS_ADB_ENABLE_MDNS=OFF', '-DCMAKE_OSX_DEPLOYMENT_TARGET=26.0', '-DCMAKE_PREFIX_PATH=/opt/homebrew')
+        '-DANDROID_TOOLS_ADB_ENABLE_MDNS=OFF', '-DCMAKE_OSX_DEPLOYMENT_TARGET=' + TARGET, '-DCMAKE_OSX_ARCHITECTURES=arm64',
+        '-DCMAKE_PREFIX_PATH=' + str(PORTABLE), '-DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew',
+        '-DCMAKE_CXX_FLAGS=-I' + str(install / 'include') + ' -I/opt/homebrew/opt/googletest/include')
     run('cmake', '--build', build_dir, '--target', 'adb', '-j6')
     return build_dir / 'vendor/adb', sources
 
@@ -101,7 +105,7 @@ def prepare(app):
                 continue
             if dependency.startswith('@rpath/'):
                 name = dependency.removeprefix('@rpath/')
-                original = next((p.resolve() for p in (binary.parent / name, Path('/opt/homebrew/lib') / name) if p.is_file()), Path('/missing') / name)
+                original = next((p.resolve() for p in (binary.parent / name, PORTABLE / 'lib' / name) if p.is_file()), Path('/missing') / name)
             elif dependency.startswith('@loader_path/'):
                 original = (binary.parent / dependency.removeprefix('@loader_path/')).resolve()
             else:
@@ -111,21 +115,20 @@ def prepare(app):
                 if copied[library_name] != original:
                     raise SystemExit('Conflicting libraries: ' + library_name)
                 continue
-            if not original.is_file() or not (str(original).startswith('/opt/homebrew/Cellar/') or original.is_relative_to(ROOT / '.build/adb-native/usb-install')):
+            if not original.is_file() or not (original.is_relative_to(ROOT / '.build/adb-native/usb-install') or original.is_relative_to(PORTABLE)):
                 raise SystemExit('Unexpected adb dependency: ' + dependency)
             copied[library_name] = original
             shutil.copy2(original, frameworks / library_name)
             (frameworks / library_name).chmod(0o755)
             pending.append(original)
-            if str(original).startswith('/opt/homebrew/Cellar/'):
-                package = Path(*original.parts[:6])
-                packages[package.parent.name] = package
     # Full upstream sources retain the compiled AOSP/BoringSSL/fmt copyright headers.
     for path in sources.values():
         shutil.copy2(path, notices / path.name)
     source = ROOT / '.build/adb-native/android-tools-37.0.0p1'
     shutil.copy2(source / 'LICENSE', notices / 'android-tools-Apache-2.0.txt')
     shutil.copy2(ROOT / '.build/adb-native/libusb-1.0.30/COPYING', notices / 'libusb-LGPL-2.1.txt')
+    for package in (PORTABLE / 'share/licenses').iterdir():
+        packages[package.name] = package
     packages['googletest-headers'] = Path('/opt/homebrew/opt/googletest').resolve()
     for name, package in packages.items():
         target = notices / name
@@ -147,8 +150,8 @@ def prepare(app):
     shutil.copy2(extra / 'utf8_range-LICENSE', notices / 'utf8_range-LICENSE')
     shutil.copy2(__file__, notices / 'adb-build.py')
     (notices / 'SOURCE.json').write_text(json.dumps({
-        'version': '37.0.0p1', 'source': ARCHIVES,
-        'changes': 'Homebrew header order; mDNS disabled; shared replaceable libusb with pipe/fcntl fallback (pipe2 disabled for macOS 26); paths rewritten; local code signing',
+        'version': '37.0.0p1', 'source': ARCHIVES, 'macos_deployment_target': TARGET,
+        'changes': 'Homebrew header order; mDNS disabled; shared replaceable libusb with pipe/fcntl fallback (pipe2 disabled for older macOS); paths rewritten; local code signing',
         'libraries': {name: str(path) for name, path in copied.items()},
     }, indent=2) + '\n')
 

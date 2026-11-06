@@ -1,6 +1,6 @@
 # Device Mirror
 
-Device Mirror 是适用于 Apple Silicon / macOS 26 的本地设备投屏与控制程序，支持 Android、iPhone、iPad 和 iOS 模拟器。每台设备使用独立窗口，可以同时连接多台设备。
+Device Mirror 是适用于 Apple Silicon / macOS 13 或以上的本地设备投屏与控制程序，支持 Android、iPhone、iPad 和 iOS 模拟器。每台设备使用独立窗口，可以同时连接多台设备。
 
 ## 开始使用
 
@@ -30,7 +30,7 @@ iOS / iPadOS 27 及以上使用持续输入通道：鼠标按下立即发送触�
 - [版权、依赖及分发要求](THIRD_PARTY.md) · [NOTICE](NOTICE)
 - [scrcpy 上游项目](https://github.com/Genymobile/scrcpy)：Android 镜像与控制核心。
 
-本地应用约 65 MB，使用原生 SwiftUI / AppKit，采用本地签名，尚未进行 Developer ID 公证。Intel 和其他 macOS 版本尚未验证。GitHub Pages 可托管介绍与下载页面；完整投屏和操控需运行本地应用。
+本地应用约 66 MB，使用原生 SwiftUI / AppKit，采用本地签名，尚未进行 Developer ID 公证。Intel 尚不支持；已完成以 macOS 13 为最低目标的部署和 API 可用性编译检查，仍需对应系统实机验证。GitHub Pages 可托管介绍与下载页面；完整投屏和操控需运行本地应用。
 
 ## 许可与来源
 

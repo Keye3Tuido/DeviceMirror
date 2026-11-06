@@ -3,6 +3,8 @@
 # Copyright 2026 Keye3Tuido
 set -euo pipefail
 cd "$(dirname "$0")"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.0}"
+python3 prepare-portable-deps.py
 mkdir -p vendor .build
 download() {
     local file="$1" url="$2" expected="$3"
@@ -19,8 +21,8 @@ download vendor/scrcpy-macos-aarch64-v5.0.1.tar.gz \
     33611e51977a8289e2e124b220f727895181ef2eb9060e0987a4dc2db9cf0d6b
 download vendor/ffmpeg-n9.0.2.tar.gz https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n9.0.2 \
     6e374ed621e48faa40639307dff48ba6fe574a509977956d2cce9669b7cc27e9
-if [[ ! -x /opt/homebrew/bin/pkg-config || ! -f /opt/homebrew/opt/sdl3/lib/libSDL3.0.dylib ]]; then
-    echo "编译依赖：brew install pkgconf sdl3" >&2; exit 1
+if [[ ! -x /opt/homebrew/bin/pkg-config ]]; then
+    echo "编译依赖：brew install pkgconf cmake ninja" >&2; exit 1
 fi
 if [[ ! -x .build/tools/bin/meson ]]; then
     python3 -m venv .build/tools

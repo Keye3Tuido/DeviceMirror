@@ -10,9 +10,9 @@
 | adb | nmeum/android-tools 37.0.0p1 及其固定 AOSP 源码 | Apache-2.0 及各源码内许可；从源码编译，保留完整源码归档。调整 BoringSSL 头文件优先级，关闭 mDNS，使用可替换的动态 libusb |
 | adb 的静态构建组件 | android-tools 归档内的 BoringSSL、fmt 及 AOSP 库 | 原 Apache、BSD、MIT、OpenSSL/ISC 等许可与版权头随完整源码归档保留 |
 | libusb | 1.0.30，libusb 官方源码 | LGPL-2.1-or-later；从固定源码编译为独立 dylib，使用 pipe/fcntl 兼容路径（禁用 pipe2）；附完整对应源码、许可与构建脚本，可替换并重新签名 |
-| adb 的动态依赖 | protobuf 36.2、Abseil 20260817.0、Brotli 1.2.1、LZ4 1.10.0、Zstd 1.5.7；GoogleTest 1.18.0 头文件 | BSD、Apache-2.0、MIT 等许可；附实际打包版本的许可证、Homebrew 版本与来源记录。protobuf 的 utf8_range 另附原 MIT 许可 |
+| adb 的动态依赖 | protobuf 36.2、Abseil 20260817.0、Brotli 1.2.1、LZ4 1.10.0、Zstd 1.5.7；GoogleTest 1.18.0 头文件 | BSD、Apache-2.0、MIT 等许可；运行库按 macOS 13 部署目标从固定且校验 SHA-256 的源码编译，附实际版本的许可证；构建工具提供的 GoogleTest 头文件保留来源记录。protobuf 的 utf8_range 另附原 MIT 许可 |
 | FFmpeg | n9.0.2，官方 FFmpeg/FFmpeg 源码 | 此构建为 LGPL-2.1-or-later，禁用 GPL、nonfree、version3 与自动探测；使用独立 dylib，随包附完整对应源码、配置及构建脚本 |
-| SDL | 3.4.16，Homebrew 官方 sdl3 配方 | zlib，保留完整 LICENSE；动态链接 |
+| SDL | 3.4.20，libsdl-org/SDL 官方源码 | zlib，保留完整 LICENSE；动态链接 |
 | 系统框架与 zlib | macOS 提供 | 使用本机安装版本，分发包不复制 Apple 系统框架或开发工具 |
 
 自有 Android 文本输入组件及其 Mac 辅助服务采用 Apache-2.0，源码分别位于 `macos-launcher/AndroidInput/` 与 `macos-launcher/AndroidInputService/`。Android SDK 和 Java 仅用于编译，不随 Mac 应用分发。APK 由本机构建密钥签名，密钥不随应用或仓库分发。

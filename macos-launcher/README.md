@@ -2,11 +2,13 @@
 
 ## 运行环境
 
-打开 `Device Mirror.app`。应用约 65 MB，支持 Apple Silicon / macOS 26，内含 adb、scrcpy、原生 Swift 控制服务和动态库，可移到任意可读的本地目录使用。日常运行不依赖源码、Homebrew 或 Python。
+打开 `Device Mirror.app`。应用约 66 MB，支持 Apple Silicon / macOS 13 或以上，内含 adb、scrcpy、原生 Swift 控制服务和动态库，可移到任意可读的本地目录使用。日常运行不依赖源码、Homebrew 或 Python。
 
 iOS 实时操控要求 iOS / iPadOS 27 或以上及完整 Xcode 27 或以上，触摸和设备按键使用原生 CoreDevice / 模拟器 DTUHID 通道，文字、返回控件定位和旋转使用本机 XCTest 启动的 WDA 组件；真机还需要开发团队及设备测试认证。Android 和 iOS USB 观看镜像使用应用内组件及 macOS 系统功能。
 
-构建产物采用本地签名。公开分发前需要完成 Developer ID 签名、公证及目标系统兼容性验证；Intel 与其他 macOS 版本尚未验证。
+Android 投屏与控制、iOS USB 观看镜像以 macOS 13 为最低部署目标。iOS 实时操控仍受 Xcode 27 的宿主系统要求限制；降低 app 的部署目标不会使旧 macOS 获得新 Xcode 的控制接口。
+
+构建产物采用本地签名。公开分发前需要完成 Developer ID 签名、公证及目标系统兼容性验证；Intel 尚不支持；macOS 13–15 的运行情况仍需对应系统实机验证。
 
 ## Android
 
@@ -86,13 +88,13 @@ WDA 请求画面参数为 20 fps、50% 尺寸、55% JPEG 质量，实际帧率�
 
 ## 构建与测试
 
-构建需要 Apple Silicon Mac、完整 Xcode、命令行开发工具、Python 3.11+、Git、Homebrew，以及 Android SDK Platform 36 / Build Tools 36.1.0 和 Java 17+。文本输入组件默认使用 `~/Library/Android/sdk` 与 Android Studio 内置 Java；可通过 `ANDROID_HOME`、`JAVA_HOME` 指定位置。Android SDK 和 Java 仅在构建时使用。adb 从固定的 android-tools 源码编译，libusb 从固定源码编译为独立动态库；构建脚本校验源码归档。
+构建需要 Apple Silicon Mac、完整 Xcode、命令行开发工具、Python 3.11+、Git、Homebrew，以及 Android SDK Platform 36 / Build Tools 36.1.0 和 Java 17+。文本输入组件默认使用 `~/Library/Android/sdk` 与 Android Studio 内置 Java；可通过 `ANDROID_HOME`、`JAVA_HOME` 指定位置。Android SDK 和 Java 仅在构建时使用。adb 从固定的 android-tools 源码编译，libusb 从固定源码编译为独立动态库；构建脚本校验源码归档。SDL、protobuf、Abseil、Brotli、LZ4、Zstd 按统一的 macOS 13 部署目标从固定源码构建，运行库不取自宿主 Homebrew；Homebrew 仅提供构建工具。
 
 在仓库根目录执行：
 
 ```sh
 git submodule update --init --recursive
-brew install pkgconf sdl3 cmake ninja protobuf brotli lz4 zstd googletest pcre2
+brew install pkgconf cmake ninja googletest pcre2
 ./macos-launcher/build.sh
 ./macos-launcher/test.sh
 python3 macos-launcher/verify-bundle.py "Device Mirror.app"
@@ -113,7 +115,7 @@ python3 macos-launcher/verify-bundle.py "Device Mirror.app"
 | macOS 26.6.2 / Xcode 27.1 | 所需 CoreDevice、CoreSimulator、AVConference 接口可加载；Swift 与原生输入服务可编译 |
 | iPad Air 4 / iPadOS 26.3 | 原生服务拒绝启用控制并返回需要 27+；不发送触摸或设备按键 |
 | iOS 26.5 模拟器 | 拒绝启用控制；设备列表标记仅观看 |
-| app 兼容性检查 | 98 个原生组件的 arm64 架构与 macOS 26.0 部署目标；独立端口首次启动 adb；只读包与含空格路径；无 Xcode 时仍可列举可用设备；精简 PATH 下运行；签名及压缩包解压后检查 |
+| app 兼容性检查 | 包内全部原生组件的 arm64 架构与 macOS 13.0 部署目标；独立端口首次启动 adb；只读包与含空格路径；无 Xcode 时仍可列举可用设备；精简 PATH 下运行；签名及压缩包解压后检查 |
 | 本地回归 | 按下与移动在松开前交给传输层；取消和坐标变化释放；不支持设备不发送输入；移动合并保留顺序；58 字节 HID、主页边缘位和 XPC 整数类型检查 |
 | Android | 保留既有实时触摸、独立日志和文本组件；本地坐标、输入、队列与实例隔离回归 |
 

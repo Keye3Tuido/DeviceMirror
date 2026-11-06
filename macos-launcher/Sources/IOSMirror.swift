@@ -735,7 +735,7 @@ struct IOSLauncherView: View {
                 .font(.caption).foregroundStyle(.secondary).lineSpacing(4).fixedSize(horizontal: false, vertical: true)
             DisclosureGroup("USB 操控：配置 Apple 账号", isExpanded: $model.showDeviceControl) {
                 IOSSigningView(model: model).padding(.top, 8)
-            }.onChange(of: model.showDeviceControl) { _, expanded in if expanded { model.detectSigning() } }
+            }.onChange(of: model.showDeviceControl) { expanded in if expanded { model.detectSigning() } }
             if let error = model.error { Text(error).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
         }.padding(26).frame(width: 560).onAppear {
             model.begin()

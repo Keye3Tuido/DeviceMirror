@@ -14,7 +14,10 @@ enum IOSUSBDevices {
         var enabled: UInt32 = 1
         CMIOObjectSetPropertyData(CMIOObjectID(kCMIOObjectSystemObject), &address, 0, nil,
                                   UInt32(MemoryLayout.size(ofValue: enabled)), &enabled)
-        return AVCaptureDevice.DiscoverySession(deviceTypes: [.external], mediaType: nil, position: .unspecified)
+        let types: [AVCaptureDevice.DeviceType]
+        if #available(macOS 14, *) { types = [.external] }
+        else { types = [.externalUnknown] }
+        return AVCaptureDevice.DiscoverySession(deviceTypes: types, mediaType: nil, position: .unspecified)
     }()
 
     static var devices: [AVCaptureDevice] {
